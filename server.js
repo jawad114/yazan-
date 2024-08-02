@@ -622,7 +622,8 @@ const MenuCategorySchema = new mongoose.Schema({
     extras: {
       requiredExtras: [{
         name: String,
-        price: Number
+        price: Number,
+        required:false
       }],
       optionalExtras: [{
         name: String,
