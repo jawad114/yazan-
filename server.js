@@ -598,16 +598,24 @@ const DishSchema = new mongoose.Schema({
   dishImage: String,
   description: String,
   extras: {
-    requiredExtras: [{
-      name: String,
-      price: Number,
-    }],
-    optionalExtras: [{
-      name: String,
-      price: Number
-    }]
+    requiredExtras: {
+      type: [{
+        name: String,
+        price: Number,
+     
+      }],
+      default: []
+    },
+    optionalExtras: {
+      type: [{
+        name: String,
+        price: Number
+      }],
+      default: []
+    }
   }
 });
+
 
 
 // Define Menu Category Schema
@@ -620,15 +628,21 @@ const MenuCategorySchema = new mongoose.Schema({
     dishImage: String,
     description: String,
     extras: {
-      requiredExtras: [{
-        name: String,
-        price: Number,
-        required:false
-      }],
-      optionalExtras: [{
-        name: String,
-        price: Number
-      }]
+      requiredExtras: {
+        type: [{
+          name: String,
+          price: Number,
+       
+        }],
+        default: []
+      },
+      optionalExtras: {
+        type: [{
+          name: String,
+          price: Number
+        }],
+        default: []
+      }
     }
   }]
 });
@@ -1644,13 +1658,14 @@ const Order = mongoose.model("Order", OrderSchema);
 
 
 // Endpoint to create an order
+// Endpoint to create an order
 app.post("/create-order/:customerId", async (req, res) => {
   const { customerId } = req.params;
 
   try {
-    const { products, status,shippingInfo, shippingOption, resName} = req.body;
+    const { products, status, shippingInfo, shippingOption, resName, userLocation } = req.body;
     let orderLocation;
-console.log('Shipping info',shippingInfo);
+
     // Fetch the restaurant details from the database
     const restaurant = await Restaurant.findOne({ restaurantName: resName });
 
@@ -1659,34 +1674,39 @@ console.log('Shipping info',shippingInfo);
     }
 
     // Get the restaurant coordinates
-    coordinatesString =  `${restaurant.coordinates.latitude},${restaurant.coordinates.longitude}`;
-    const restaurantCoordinates = coordinatesString.replace(/\[|\]|'/g, '').split(',').map(Number);
-    console.log(restaurantCoordinates); // Output: [78, 68]
+    const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
+
     // Determine the order location based on the shipping option
     if (shippingOption === 'self-pickup') {
-      // Set the order location as the restaurant coordinates for self-pickup
       orderLocation = {
         type: 'Point',
         coordinates: restaurantCoordinates
       };
-      } else if (shippingOption === 'delivery') {
-        const {userLocation} = req.body;
-        console.log('User Location',userLocation); // Output: [
-      const address = `${userLocation.lat},${userLocation.lng}`;
-      console.log(address);
-      // Use Google Maps Geocoding API to get user's current location coordinates
-      const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
-      const { results } = geocodingResponse.data;
-      const location = results[0].geometry.location;
-       orderLocation = {
-         type: 'Point',
-         coordinates: [location.lng, location.lat]
-         };
+    } else if (shippingOption === 'delivery') {
+      if (!userLocation) {
+        return res.status(400).json({ error: "User location is required for delivery option" });
+      }
+      try {
+        const address = `${userLocation.lat},${userLocation.lng}`;
+        const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
+        const { results } = geocodingResponse.data;
+        if (!results || results.length === 0) {
+          throw new Error('Geocoding failed or no results found');
+        }
+        const location = results[0].geometry.location;
+        orderLocation = {
+          type: 'Point',
+          coordinates: [location.lng, location.lat]
+        };
+      } catch (error) {
+        console.error('Geocoding error:', error);
+        return res.status(500).json({ error: "Failed to get user location" });
+      }
     } else {
       return res.status(400).json({ error: "Invalid shipping option" });
     }
 
-    const orderId = generateRandomOrderId(); // Generate a random orderId
+    const orderId = generateRandomOrderId(); // Assuming generateRandomOrderId is defined elsewhere
     const order = new Order({
       orderId: orderId,
       resName: resName,
@@ -1695,14 +1715,17 @@ console.log('Shipping info',shippingInfo);
       status: status,
       shippingInfo: shippingInfo,
       shippingOption: shippingOption,
-      orderLocation: orderLocation, // Store the order location
-      createdAt: new Date(), // Set createdAt field to current date and time
-      orderTime: new Date() // Set orderTime field to current date and time
+      orderLocation: orderLocation,
+      createdAt: new Date(),
+      orderTime: new Date()
     });
 
     await order.save();
 
     await Cart.deleteOne({ customerId: customerId });
+
+    // Broadcast 'newOrderReceived' message to all clients (including the restaurant owner)
+    broadcastNewOrderReceived();
 
     return res.status(201).json({ status: "ok", message: "Order created successfully", order });
   } catch (error) {
@@ -1711,6 +1734,11 @@ console.log('Shipping info',shippingInfo);
   }
 });
 
+// Function to broadcast 'newOrderReceived' message to all clients
+function broadcastNewOrderReceived() {
+  clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {client.send('newOrderReceived');}
+  })}
 function generateRandomOrderId() {
   const timestamp = Date.now().toString(36);
   const randomString = Math.random().toString(36).substr(2, 5);
