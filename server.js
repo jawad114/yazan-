@@ -1749,6 +1749,7 @@ app.post("/create-order/:customerId", async (req, res) => {
 
     // Broadcast 'newOrderReceived' message to all clients (including the restaurant owner)
     broadcastNewOrderReceived(resName);
+    broadcastCartUpdated();
 
     return res.status(201).json({ status: "ok", message: "Order created successfully", order });
   } catch (error) {
