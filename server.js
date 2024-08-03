@@ -11,6 +11,13 @@ const jwt = require('jsonwebtoken');
 const http = require('http');
 const WebSocket = require('ws');
 
+const corsOptions = {
+  origin: 'https://layla-restaurant.netlify.app',
+  allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
+};
+
+app.use(cors(corsOptions))
+
 const server = http.createServer(app);
 
 // Create a WebSocket server attached to the HTTP server
@@ -78,7 +85,6 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 
 app.use(express.json());
-app.use(cors());
 
 app.get('/api/proxy', async (req, res) => {
   try {
