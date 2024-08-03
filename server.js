@@ -8,9 +8,13 @@ const PORT = process.env.PORT | 5002;
 const bodyParser = require('body-parser');
 const bcrypt = require("bcryptjs");
 const jwt = require('jsonwebtoken');
+const http = require('http');
 const WebSocket = require('ws');
 
-const wss = new WebSocket.Server({ port: 8088 });
+const server = http.createServer(app);
+
+// Create a WebSocket server attached to the HTTP server
+const wss = new WebSocket.Server({ server });
 
 
 const nodemailer = require('nodemailer');
@@ -34,27 +38,38 @@ wss.on('connection', function connection(ws) {
 
   // Handle messages from clients (if needed)
   ws.on('message', function incoming(message) {
-    // Handle incoming messages if required
-  });
+      console.log('Received:', message);
+    });  
 });
 
-// Use this function to broadcast 'cartUpdated' message to all clients
+
 function broadcastCartUpdated() {
+  console.log('Broadcasting cartUpdated');
   clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send('cartUpdated');
+      client.send(JSON.stringify({ type: 'cartUpdated' }));
     }
   });
 }
 
-// Use this function to broadcast 'favoritesUpdated' message to all clients
 function broadcastFavoritesUpdated() {
+  console.log('Broadcasting favoritesUpdated');
   clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send('favoritesUpdated');
+      client.send(JSON.stringify({ type: 'favoritesUpdated' }));
     }
   });
 }
+
+function broadcastNewOrderReceived() {
+  console.log('Broadcasting newOrderReceived');
+  clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type: 'newOrderReceived' }));
+    }
+  });
+}
+
 
 app.use(bodyParser.json({ limit: '50mb' })); // Adjust the limit as needed
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
@@ -86,7 +101,7 @@ mongoose
   .then(() => console.log("MongoDb connected"))
   .catch((error) => console.log(error));
 
-app.listen(PORT, () => console.log(`listening at ${PORT}`));
+  server.listen(PORT, () => console.log(`listening at ${PORT}`));
 
 
 // Middleware to refresh JWT token before expiration
@@ -1001,7 +1016,7 @@ app.delete("/remove-from-favorites/:customerId", async (req, res) => {
     const { customerId } = req.params;
     const { restaurantName } = req.body;
     await Favorite.findOneAndDelete({ customerId, restaurantName }); // Use an object to specify the query
-    res.send({ message: "Favorite removed successfully" });
+    res.status(201).send({ message: "Favorite removed successfully" });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -1734,11 +1749,7 @@ app.post("/create-order/:customerId", async (req, res) => {
   }
 });
 
-// Function to broadcast 'newOrderReceived' message to all clients
-function broadcastNewOrderReceived() {
-  clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {client.send('newOrderReceived');}
-  })}
+
 function generateRandomOrderId() {
   const timestamp = Date.now().toString(36);
   const randomString = Math.random().toString(36).substr(2, 5);
