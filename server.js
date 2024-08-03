@@ -22,6 +22,7 @@ const nodemailer = require('nodemailer');
 let clients = [];
 
 wss.on('connection', function connection(ws) {
+
   // Add the new client to the list of clients
   clients.push(ws);
 
@@ -61,14 +62,15 @@ function broadcastFavoritesUpdated() {
   });
 }
 
-function broadcastNewOrderReceived() {
-  console.log('Broadcasting newOrderReceived');
+function broadcastNewOrderReceived(restaurantName) {
+  console.log('Broadcasting newOrderReceived for restaurant:', restaurantName);
   clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ type: 'newOrderReceived' }));
+      client.send(JSON.stringify({ type: 'newOrderReceived', restaurantName: restaurantName }));
     }
   });
 }
+
 
 
 app.use(bodyParser.json({ limit: '50mb' })); // Adjust the limit as needed
@@ -1740,7 +1742,7 @@ app.post("/create-order/:customerId", async (req, res) => {
     await Cart.deleteOne({ customerId: customerId });
 
     // Broadcast 'newOrderReceived' message to all clients (including the restaurant owner)
-    broadcastNewOrderReceived();
+    broadcastNewOrderReceived(resName);
 
     return res.status(201).json({ status: "ok", message: "Order created successfully", order });
   } catch (error) {
