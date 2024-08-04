@@ -12,9 +12,11 @@ const http = require('http');
 const WebSocket = require('ws');
 
 const corsOptions = {
-  origin: 'https://layla-restaurant.netlify.app',
+  origin: '*',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
+
+// https://layla-restaurant.netlify.app
 
 app.use(cors(corsOptions))
 
@@ -918,8 +920,78 @@ app.put("/update-opening-hours/:restaurantName/:day", async (req, res) => {
 
 const axios = require('axios');
 
+// app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
+//   const { restaurantName, picture, location, menu } = req.body;
+
+//   try {
+//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
+//     if (existingRestaurant) {
+//       return res.status(400).json({ error: "Restaurant with the same name already exists" });
+//     }
+
+//     // Fetch coordinates using Google Maps Geocoding API
+//     // const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=your-api-here`);
+//     // console.log(geocodingResponse.data);
+//     // const { results } = geocodingResponse.data;
+//     // const coordinates = results[0].geometry.location;
+
+//     const menuCategories = await Promise.all(menu && menu.map(async categoryData => {
+//       const dishes = await Promise.all(categoryData.dishes.map(async dishData => {
+//         const dish = new Dish({
+//           name: dishData.name,
+//           price: dishData.price,
+//           dishImage: dishData.dishImage,
+//           description: dishData.description,
+//           extras: {
+//             requiredExtras: dishData.requiredExtras,
+//             optionalExtras: dishData.optionalExtras
+//           }
+//         });
+
+//         await dish.save();
+//         return dish;
+//       }));
+
+//       const menuCategory = new MenuCategory({
+//         categoryName: categoryData.categoryName,
+//         dishes
+//       });
+
+//       await menuCategory.save();
+//       return menuCategory;
+//     }));
+
+//     const newRestaurant = new Restaurant({
+//       restaurantName,
+//       picture,
+//       location,
+//       coordinates: {
+//         latitude: '78',
+//         longitude: '68'
+//       },
+//       menu: menuCategories,
+//       generatedEmail: req.generatedEmail,
+//       generatedPassword: req.generatedPassword
+//     });
+
+//     // Save the new restaurant to the database
+//     await newRestaurant.save();
+
+//     return res.status(201).json({
+//       status: "ok",
+//       message: "Restaurant added successfully",
+//       generatedEmail: req.generatedEmail,
+//       generatedPassword: req.generatedPassword
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+
 app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
-  const { restaurantName, picture, location, menu } = req.body;
+  const { restaurantName, picture, location } = req.body;
 
   try {
     const existingRestaurant = await Restaurant.findOne({ restaurantName });
@@ -933,31 +1005,34 @@ app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
     // const { results } = geocodingResponse.data;
     // const coordinates = results[0].geometry.location;
 
-    const menuCategories = await Promise.all(menu && menu.map(async categoryData => {
-      const dishes = await Promise.all(categoryData.dishes.map(async dishData => {
-        const dish = new Dish({
-          name: dishData.name,
-          price: dishData.price,
-          dishImage: dishData.dishImage,
-          description: dishData.description,
-          extras: {
-            requiredExtras: dishData.requiredExtras,
-            optionalExtras: dishData.optionalExtras
-          }
+    let menuCategories = [];
+    if (req.body.menu) {
+      menuCategories = await Promise.all(menu.map(async categoryData => {
+        const dishes = await Promise.all(categoryData.dishes.map(async dishData => {
+          const dish = new Dish({
+            name: dishData.name,
+            price: dishData.price,
+            dishImage: dishData.dishImage,
+            description: dishData.description,
+            extras: {
+              requiredExtras: dishData.requiredExtras,
+              optionalExtras: dishData.optionalExtras
+            }
+          });
+
+          await dish.save();
+          return dish;
+        }));
+
+        const menuCategory = new MenuCategory({
+          categoryName: categoryData.categoryName,
+          dishes
         });
 
-        await dish.save();
-        return dish;
+        await menuCategory.save();
+        return menuCategory;
       }));
-
-      const menuCategory = new MenuCategory({
-        categoryName: categoryData.categoryName,
-        dishes
-      });
-
-      await menuCategory.save();
-      return menuCategory;
-    }));
+    }
 
     const newRestaurant = new Restaurant({
       restaurantName,
@@ -967,7 +1042,7 @@ app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
         latitude: '78',
         longitude: '68'
       },
-      menu: menuCategories,
+      menu: menuCategories.length > 0 ? menuCategories : undefined,
       generatedEmail: req.generatedEmail,
       generatedPassword: req.generatedPassword
     });
@@ -986,6 +1061,7 @@ app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 
 
@@ -1112,6 +1188,68 @@ app.put("/update-restaurant/:resName", async (req, res) => {
 
 
 // API endpoint to add dishes and menu items to an existing restaurant
+// app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
+//   const { restaurantName } = req.params;
+//   const { menu } = req.body;
+
+//   try {
+//     // Find the restaurant by name
+//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
+
+//     if (!existingRestaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Construct menu categories with dishes
+//     const menuCategories = await Promise.all(menu && menu.map(async category => {
+//       const dishes = await Promise.all(category.dishes && category.dishes.map(async dishData => {
+//         const dishOptionalExtras = dishData.optionalExtras && dishData.optionalExtras.map(optionalExtra => ({
+//           name: optionalExtra.name,
+//           price: optionalExtra.price
+//         }));
+//         const dishRequiredExtras = dishData.requiredExtras && dishData.requiredExtras.map(requiredExtra => ({
+//           name: requiredExtra.name,
+//           price: requiredExtra.price
+//         }));
+
+//         const dish = new Dish({
+//           name: dishData.name,
+//           price: dishData.price,
+//           dishImage: dishData.dishImage,
+//           description: dishData.description,
+//           extras: {
+//             requiredExtras: dishRequiredExtras,
+//             optionalExtras: dishOptionalExtras,
+//           }
+//         });
+
+//         await dish.save();
+//         return dish;
+//       }));
+
+//       const menuCategory = new MenuCategory({
+//         categoryName: category.categoryName,
+//         dishes: dishes
+//       });
+//       await menuCategory.save();
+
+//       return menuCategory;
+//     }));
+
+//     // Add new menu categories to the existing restaurant
+//     existingRestaurant.menu.push(...menuCategories);
+//     await existingRestaurant.save();
+
+//     return res.status(201).json({
+//       status: "ok",
+//       message: "Menu items added to the restaurant successfully"
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
 app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
   const { restaurantName } = req.params;
   const { menu } = req.body;
@@ -1127,14 +1265,23 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
     // Construct menu categories with dishes
     const menuCategories = await Promise.all(menu && menu.map(async category => {
       const dishes = await Promise.all(category.dishes && category.dishes.map(async dishData => {
-        const dishOptionalExtras = dishData.optionalExtras && dishData.optionalExtras.map(optionalExtra => ({
-          name: optionalExtra.name,
-          price: optionalExtra.price
-        }));
-        const dishRequiredExtras = dishData.requiredExtras && dishData.requiredExtras.map(requiredExtra => ({
-          name: requiredExtra.name,
-          price: requiredExtra.price
-        }));
+        const dishOptionalExtras = Array.isArray(dishData.optionalExtras)
+          ? dishData.optionalExtras
+              .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+              .map(optionalExtra => ({
+                name: optionalExtra.name,
+                price: optionalExtra.price
+              }))
+          : undefined;
+
+        const dishRequiredExtras = Array.isArray(dishData.requiredExtras)
+          ? dishData.requiredExtras
+              .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+              .map(requiredExtra => ({
+                name: requiredExtra.name,
+                price: requiredExtra.price
+              }))
+          : undefined;
 
         const dish = new Dish({
           name: dishData.name,
@@ -1142,8 +1289,8 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
           dishImage: dishData.dishImage,
           description: dishData.description,
           extras: {
-            requiredExtras: dishRequiredExtras,
-            optionalExtras: dishOptionalExtras,
+            requiredExtras: dishRequiredExtras && dishRequiredExtras.length > 0 ? dishRequiredExtras : undefined,
+            optionalExtras: dishOptionalExtras && dishOptionalExtras.length > 0 ? dishOptionalExtras : undefined
           }
         });
 
@@ -1173,6 +1320,7 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, async (req, res) => {
   const { resName, categoryName, dishId } = req.params;
@@ -1681,7 +1829,6 @@ const Order = mongoose.model("Order", OrderSchema);
 
 
 // Endpoint to create an order
-// Endpoint to create an order
 app.post("/create-order/:customerId", async (req, res) => {
   const { customerId } = req.params;
 
@@ -1777,14 +1924,31 @@ app.get("/orders", async (req, res) => {
   }
 });
 
-//get owner orders of his restaurant
 // Endpoint to get orders by resName
+// app.get("/orders/:resName", async (req, res) => {
+//   const { resName } = req.params;
+// console.log('Res Name passing in backend for fetching res specific order',resName);
+//   try {
+//     const orders = await Order.find({ resName });
+//     console.log('Order found', orders);
+//     if (orders.length === 0) {
+//       console.log('No orders found');
+//       return res.status(404).json({ status: "error", message: "No orders found for the specified restaurant name" });
+//     }
+//     return res.status(200).json({ status: "ok", orders });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
 app.get("/orders/:resName", async (req, res) => {
   const { resName } = req.params;
-
+  console.log('Res Name passing in backend for fetching res specific order', resName);
+  
   try {
-    const orders = await Order.find({ resName });
+    const orders = await Order.find({ resName: { $regex: new RegExp(`^${resName}$`, 'i') } });
     if (orders.length === 0) {
+      console.log('No orders found');
       return res.status(404).json({ status: "error", message: "No orders found for the specified restaurant name" });
     }
     return res.status(200).json({ status: "ok", orders });
@@ -1876,8 +2040,16 @@ app.get("/restaurant-categories/:restaurantName", async (req, res) => {
     }
 
     const categories = restaurant.menu.map(category => category.categoryName);
+    console.log(categories[0]);
+    const category = restaurant.menu.find(category => category.categoryName === categories[0]);
+    if (!category) {
+      return res.status(404).json({ error: "Category not found in the specified restaurant" });
+    }
 
-    return res.status(200).json({ status: "ok", categories });
+    const categoryImage = category.dishes[0].dishImage; // Assuming dishes are the products
+    console.log(categoryImage)
+
+    return res.status(200).json({ status: "ok", categories,categoryImage });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -1893,7 +2065,8 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
     if (!restaurant) {
       return res.status(404).json({ error: "Restaurant not found" });
     }
-
+    const restaurantImage = restaurant.picture;
+    console.log('Restaurant Image',restaurantImage);
     const category = restaurant.menu.find(category => category.categoryName === categoryName);
     if (!category) {
       return res.status(404).json({ error: "Category not found in the specified restaurant" });
@@ -1902,7 +2075,7 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
     const products = category.dishes; // Assuming dishes are the products
     console.log(category)
 
-    return res.status(200).json({ status: "ok", products });
+    return res.status(200).json({ status: "ok", products,restaurantImage });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -1945,6 +2118,54 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
 //   }
 // });
 
+// app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (req, res) => {
+//   const { restaurantName, categoryName } = req.params;
+//   const { name, price, dishImage, description, extras } = req.body;
+//   const { requiredExtras, optionalExtras } = extras;
+
+//   try {
+//     const restaurant = await Restaurant.findOne({ restaurantName });
+//     if (!restaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     const categoryIndex = restaurant.menu.findIndex(category => category.categoryName === categoryName);
+//     if (categoryIndex === -1) {
+//       return res.status(404).json({ error: "Category not found in the specified restaurant" });
+//     }
+
+//     const newDish = new Dish({
+//       name,
+//       price,
+//       dishImage,
+//       description,
+//       extras: {
+//         requiredExtras: requiredExtras,
+//         optionalExtras: optionalExtras,
+//       }
+//     });
+
+//     await newDish.save();
+
+//     // Push the new dish to the specified category in the menu
+//     restaurant.menu[categoryIndex].dishes.push(newDish);
+    
+//     // Update the menu in the database
+//     await Restaurant.findByIdAndUpdate(restaurant._id, { menu: restaurant.menu });
+
+//     // Update the menucategories table
+//     await MenuCategory.findOneAndUpdate(
+//       { categoryName: categoryName },
+//       { $push: { dishes: newDish } }
+//     );
+
+//     return res.status(201).json({ status: "ok", message: "Dish added successfully", dish: newDish });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
 app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (req, res) => {
   const { restaurantName, categoryName } = req.params;
   const { name, price, dishImage, description, extras } = req.body;
@@ -1961,14 +2182,32 @@ app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (r
       return res.status(404).json({ error: "Category not found in the specified restaurant" });
     }
 
+    const validRequiredExtras = Array.isArray(requiredExtras)
+      ? requiredExtras
+          .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+          .map(extra => ({
+            name: extra.name,
+            price: extra.price
+          }))
+      : undefined;
+
+    const validOptionalExtras = Array.isArray(optionalExtras)
+      ? optionalExtras
+          .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+          .map(extra => ({
+            name: extra.name,
+            price: extra.price
+          }))
+      : undefined;
+
     const newDish = new Dish({
       name,
       price,
       dishImage,
       description,
       extras: {
-        requiredExtras: requiredExtras,
-        optionalExtras: optionalExtras,
+        requiredExtras: validRequiredExtras && validRequiredExtras.length > 0 ? validRequiredExtras : undefined,
+        optionalExtras: validOptionalExtras && validOptionalExtras.length > 0 ? validOptionalExtras : undefined
       }
     });
 
@@ -1980,7 +2219,7 @@ app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (r
     // Update the menu in the database
     await Restaurant.findByIdAndUpdate(restaurant._id, { menu: restaurant.menu });
 
-    // Update the menucategories table
+    // Update the MenuCategory table
     await MenuCategory.findOneAndUpdate(
       { categoryName: categoryName },
       { $push: { dishes: newDish } }
@@ -1992,6 +2231,7 @@ app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (r
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 
 // Endpoint to delete a dish from a specific category in a specific restaurant
