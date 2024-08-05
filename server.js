@@ -17,6 +17,7 @@ const corsOptions = {
 };
 
 
+
 app.use(cors(corsOptions))
 
 const server = http.createServer(app);
@@ -1839,9 +1840,10 @@ app.post("/create-order/:customerId", async (req, res) => {
     let orderLocation;
 
     // Fetch the restaurant details from the database
-    const restaurant = await Restaurant.findOne({ restaurantName: resName });
-
+    const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
+console.log('resname received in create order', resName);
     if (!restaurant) {
+      console.log('restaurant not found');
       return res.status(404).json({ error: "Restaurant not found" });
     }
 
