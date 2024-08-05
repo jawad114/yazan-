@@ -16,6 +16,8 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
+
+
 app.use(cors(corsOptions))
 
 const server = http.createServer(app);
