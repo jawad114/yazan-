@@ -647,6 +647,7 @@ const DishSchema = new mongoose.Schema({
 // Define Menu Category Schema
 const MenuCategorySchema = new mongoose.Schema({
   categoryName: String,
+  categoryImage: String,
   dishes: [{
     name: String,
     price: Number,
@@ -919,6 +920,7 @@ app.put("/update-opening-hours/:restaurantName/:day", async (req, res) => {
 
 
 const axios = require('axios');
+const { ok } = require("assert");
 
 // app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
 //   const { restaurantName, picture, location, menu } = req.body;
@@ -1300,6 +1302,7 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
 
       const menuCategory = new MenuCategory({
         categoryName: category.categoryName,
+        categoryImage: category.categoryImage,
         dishes: dishes
       });
       await menuCategory.save();
@@ -2038,18 +2041,24 @@ app.get("/restaurant-categories/:restaurantName", async (req, res) => {
     if (!restaurant) {
       return res.status(404).json({ error: "Restaurant not found" });
     }
+    
+    const restaurantImage = restaurant.picture; // Assuming dishes are the products
 
-    const categories = restaurant.menu.map(category => category.categoryName);
-    console.log(categories[0]);
-    const category = restaurant.menu.find(category => category.categoryName === categories[0]);
+
+    const categories = restaurant.menu.map(category => ({
+      categoryName: category.categoryName,
+      categoryImage: category.categoryImage
+    }));
+    console.log('Categories', categories);
+    
+    // Find the category by categoryName
+    const category = restaurant.menu.find(category => category.categoryName === categories[0].categoryName);
+    
     if (!category) {
-      return res.status(404).json({ error: "Category not found in the specified restaurant" });
+      return res.status(201).json({ status: "notfound", restaurantImage });
     }
 
-    const categoryImage = category.dishes[0].dishImage; // Assuming dishes are the products
-    console.log(categoryImage)
-
-    return res.status(200).json({ status: "ok", categories,categoryImage });
+    return res.status(200).json({ status: "ok", categories,restaurantImage });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -2069,7 +2078,7 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
     console.log('Restaurant Image',restaurantImage);
     const category = restaurant.menu.find(category => category.categoryName === categoryName);
     if (!category) {
-      return res.status(404).json({ error: "Category not found in the specified restaurant" });
+      return res.status(201).json({ restaurantImage });
     }
 
     const products = category.dishes; // Assuming dishes are the products
