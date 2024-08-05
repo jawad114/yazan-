@@ -918,6 +918,26 @@ app.put("/update-opening-hours/:restaurantName/:day", async (req, res) => {
   }
 });
 
+app.get("/opening-hours/:restaurantName", async (req, res) => {
+  const { restaurantName } = req.params;
+
+  try {
+    // Find the restaurant by name
+    const restaurant = await Restaurant.findOne({ restaurantName });
+
+    if (!restaurant) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    // Return the opening hours for the restaurant
+    return res.status(200).json({ openingHours: restaurant.openingHours });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
 
 const axios = require('axios');
 const { ok } = require("assert");
@@ -1252,6 +1272,78 @@ app.put("/update-restaurant/:resName", async (req, res) => {
 //   }
 // });
 
+// app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
+//   const { restaurantName } = req.params;
+//   const { menu } = req.body;
+
+//   try {
+//     // Find the restaurant by name
+//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
+
+//     if (!existingRestaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Construct menu categories with dishes
+//     const menuCategories = await Promise.all(menu && menu.map(async category => {
+//       const dishes = await Promise.all(category.dishes && category.dishes.map(async dishData => {
+//         const dishOptionalExtras = Array.isArray(dishData.optionalExtras)
+//           ? dishData.optionalExtras
+//               .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+//               .map(optionalExtra => ({
+//                 name: optionalExtra.name,
+//                 price: optionalExtra.price
+//               }))
+//           : undefined;
+
+//         const dishRequiredExtras = Array.isArray(dishData.requiredExtras)
+//           ? dishData.requiredExtras
+//               .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+//               .map(requiredExtra => ({
+//                 name: requiredExtra.name,
+//                 price: requiredExtra.price
+//               }))
+//           : undefined;
+
+//         const dish = new Dish({
+//           name: dishData.name,
+//           price: dishData.price,
+//           dishImage: dishData.dishImage,
+//           description: dishData.description,
+//           extras: {
+//             requiredExtras: dishRequiredExtras && dishRequiredExtras.length > 0 ? dishRequiredExtras : undefined,
+//             optionalExtras: dishOptionalExtras && dishOptionalExtras.length > 0 ? dishOptionalExtras : undefined
+//           }
+//         });
+
+//         await dish.save();
+//         return dish;
+//       }));
+
+//       const menuCategory = new MenuCategory({
+//         categoryName: category.categoryName,
+//         categoryImage: category.categoryImage,
+//         dishes: dishes
+//       });
+//       await menuCategory.save();
+
+//       return menuCategory;
+//     }));
+
+//     // Add new menu categories to the existing restaurant
+//     existingRestaurant.menu.push(...menuCategories);
+//     await existingRestaurant.save();
+
+//     return res.status(201).json({
+//       status: "ok",
+//       message: "Menu items added to the restaurant successfully"
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
 app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
   const { restaurantName } = req.params;
   const { menu } = req.body;
@@ -1264,59 +1356,37 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
       return res.status(404).json({ error: "Restaurant not found" });
     }
 
-    // Construct menu categories with dishes
-    const menuCategories = await Promise.all(menu && menu.map(async category => {
-      const dishes = await Promise.all(category.dishes && category.dishes.map(async dishData => {
-        const dishOptionalExtras = Array.isArray(dishData.optionalExtras)
-          ? dishData.optionalExtras
-              .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
-              .map(optionalExtra => ({
-                name: optionalExtra.name,
-                price: optionalExtra.price
-              }))
-          : undefined;
+    // Check if menu is provided
+    if (!menu || !Array.isArray(menu)) {
+      return res.status(400).json({ error: "Invalid menu format" });
+    }
 
-        const dishRequiredExtras = Array.isArray(dishData.requiredExtras)
-          ? dishData.requiredExtras
-              .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
-              .map(requiredExtra => ({
-                name: requiredExtra.name,
-                price: requiredExtra.price
-              }))
-          : undefined;
-
-        const dish = new Dish({
-          name: dishData.name,
-          price: dishData.price,
-          dishImage: dishData.dishImage,
-          description: dishData.description,
-          extras: {
-            requiredExtras: dishRequiredExtras && dishRequiredExtras.length > 0 ? dishRequiredExtras : undefined,
-            optionalExtras: dishOptionalExtras && dishOptionalExtras.length > 0 ? dishOptionalExtras : undefined
-          }
-        });
-
-        await dish.save();
-        return dish;
-      }));
+    // Construct menu categories without dishes
+    const menuCategories = await Promise.all(menu.map(async category => {
+      if (!category || !category.categoryName) {
+        // Skip if category or categoryName is not provided
+        return null;
+      }
 
       const menuCategory = new MenuCategory({
         categoryName: category.categoryName,
         categoryImage: category.categoryImage,
-        dishes: dishes
       });
+      
       await menuCategory.save();
-
       return menuCategory;
     }));
 
+    // Remove any null values from the array (categories with no valid data)
+    const validMenuCategories = menuCategories.filter(category => category !== null);
+
     // Add new menu categories to the existing restaurant
-    existingRestaurant.menu.push(...menuCategories);
+    existingRestaurant.menu.push(...validMenuCategories);
     await existingRestaurant.save();
 
     return res.status(201).json({
       status: "ok",
-      message: "Menu items added to the restaurant successfully"
+      message: "Menu categories added to the restaurant successfully"
     });
   } catch (error) {
     console.error(error);
