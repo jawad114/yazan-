@@ -17,7 +17,6 @@ const corsOptions = {
 };
 
 
-
 app.use(cors(corsOptions))
 
 const server = http.createServer(app);
