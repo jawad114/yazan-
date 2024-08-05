@@ -12,11 +12,10 @@ const http = require('http');
 const WebSocket = require('ws');
 
 const corsOptions = {
-  origin: '*',
+  origin: 'https://layla-restaurant.netlify.app',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
-// https://layla-restaurant.netlify.app
 
 app.use(cors(corsOptions))
 
