@@ -268,13 +268,13 @@ app.post("/register-client", async (req, res) => {
 
     // Send verification code to the user's email
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
-      auth: {
-        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
-      }
+    host: 'layla-res.com',
+    port: 465,
+    secure: true, // Use true for 465, false for other ports
+    auth: {
+        user: 'help@layla-res.com',
+        pass: 'Laylar@010'
+    }
     });
 
     // Configure email options
