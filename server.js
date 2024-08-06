@@ -15,8 +15,7 @@ const corsOptions = {
   origin: 'https://layla-restaurant.netlify.app',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
-
-
+ 
 
 app.use(cors(corsOptions))
 
@@ -1394,6 +1393,74 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
   }
 });
 
+// Update category endpoint
+app.put("/update-category/:restaurantName/:categoryName", async (req, res) => {
+  const { restaurantName, categoryName } = req.params;
+  const { newCategoryName, categoryImage } = req.body;
+
+  try {
+    console.log('Restaurant Name',restaurantName);
+    console.log('Category Name',categoryName);
+    console.log('New Category Name',newCategoryName);
+    // Find the restaurant by name
+    const existingRestaurant = await Restaurant.findOne({ restaurantName });
+
+    if (!existingRestaurant) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    // Find the category by name
+    const category = existingRestaurant.menu.find(cat => cat.categoryName === categoryName);
+
+    if (!category) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    // Update category details
+    category.categoryName = newCategoryName || category.categoryName;
+    category.categoryImage = categoryImage || category.categoryImage;
+
+    await existingRestaurant.save();
+
+    return res.status(200).json({
+      status: "ok",
+      message: "Category updated successfully"
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Delete category endpoint
+app.delete("/delete-category/:restaurantName/:categoryName", async (req, res) => {
+  const { restaurantName, categoryName } = req.params;
+
+  try {
+    // Find the restaurant by name
+    const existingRestaurant = await Restaurant.findOne({ restaurantName });
+
+    if (!existingRestaurant) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    // Find and remove the category by name
+    existingRestaurant.menu = existingRestaurant.menu.filter(cat => cat.categoryName !== categoryName);
+
+    await existingRestaurant.save();
+
+    return res.status(200).json({
+      status: "ok",
+      message: "Category deleted successfully"
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+
 
 app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, async (req, res) => {
   const { resName, categoryName, dishId } = req.params;
@@ -1906,9 +1973,9 @@ app.post("/create-order/:customerId", async (req, res) => {
   const { customerId } = req.params;
 
   try {
-    const { products, status, shippingInfo, shippingOption, resName, userLocation } = req.body;
+    const { products, shippingInfo, shippingOption, resName, userLocation } = req.body;
     let orderLocation;
-
+const status = '';
     // Fetch the restaurant details from the database
     const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
 console.log('resname received in create order', resName);
