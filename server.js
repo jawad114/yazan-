@@ -106,7 +106,7 @@ app.get("/", (req, res) => {
 
 
 mongoose
-  .connect('mongodb+srv://resturant:hgTgKYGDfSlKqxX5@resturant.gm0rfkh.mongodb.net/layla')
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDb connected"))
   .catch((error) => console.log(error));
 
@@ -125,7 +125,7 @@ const refreshAuthToken = (req, res, next) => {
 
   const token = authorizationHeader.split(' ')[1];
 
-  jwt.verify(token, 'your_secret_key', (err, decoded) => {
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
 
       if (err.name === 'TokenExpiredError') {
@@ -161,7 +161,7 @@ const authenticateUser = (req, res, next) => {
   const token = authorizationHeader.split(' ')[1];
 
   // Verify the token
-  jwt.verify(token, 'your_secret_key', (err, decoded) => {
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
       return res.status(401).json({ error: "Unauthorized: Invalid token" });
     }
@@ -174,7 +174,7 @@ const authenticateUser = (req, res, next) => {
 
 // Function to generate JWT token
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, 'your_secret_key', { expiresIn: '1h' });
+  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
 };
 
 
@@ -268,13 +268,13 @@ app.post("/register-client", async (req, res) => {
 
     // Send verification code to the user's email
     const transporter = nodemailer.createTransport({
-    host: 'layla-res.com',
-    port: 465,
-    secure: true, // Use true for 465, false for other ports
-    auth: {
-        user: 'help@layla-res.com',
-        pass: 'Laylar@010'
-    }
+      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      auth: {
+        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
+        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+      }
     });
 
     // Configure email options
@@ -326,7 +326,7 @@ app.post("/verify-code/:email", async (req, res) => {
     await client.save();
 
     // Generate JWT token for the verified client
-    const token = jwt.sign({ userId: client._id }, 'your_secret_key', { expiresIn: "1h" });
+    const token = jwt.sign({ userId: client._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
     // Clear verification code and expiration
     client.verificationCode = undefined;
@@ -455,8 +455,8 @@ app.post('/check-email-exists', async (req, res) => {
 app.post("/admin/login", async (req, res) => {
   const { email, password } = req.body;
 
-  if (email === 'admin@deliver.com' && password === '11111111') {
-    const token = generateToken('admin@deliver.com');
+  if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+    const token = generateToken(process.env.ADMIN_EMAIL);
     return res.json({ status: "ok", message: "Admin authenticated successfully", token });
   } else {
     return res.status(401).json({ error: "Invalid credentials" });
@@ -469,7 +469,7 @@ app.post("/admin/login", async (req, res) => {
 const authenticateAdmin = (req, res, next) => {
   const { email, password } = req.body;
 
-  if (email === 'admin@deliver.com' && password === '11111111') {
+  if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
     next();
   } else {
     return res.status(401).json({ error: "Unauthorized: Admin credentials required" });
@@ -2805,13 +2805,20 @@ app.post('/reset-password', async (req, res) => {
 
     // Send email notification
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
-      auth: {
-        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
-      }
+    //   host: 'layla-res.com',
+    // port: 465,
+    // secure: true, // Use true for 465, false for other ports
+    // auth: {
+    //     user: 'help@layla-res.com',
+    //     pass: 'Laylar@010'
+    // }
+    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    auth: {
+      user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
+      pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+    }
     });
 
     const mailOptions = {
