@@ -25,7 +25,6 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
-
  
 
 app.use(cors(corsOptions))
@@ -2192,6 +2191,7 @@ const OrderSchema = new mongoose.Schema({
   },
   preparingTime: Number,
   preparingStartedAt: Date,
+  tableNumber: Number,
   createdAt: { type: Date, default: Date.now },
   orderTime: Date,
   completedAt: Date,
@@ -2255,14 +2255,26 @@ console.log('resname received in create order', resName);
 
     // Get the restaurant coordinates
     const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
+    if (shippingOption === 'dine-in' && req.body.tableNumber) {
+      // Check if the table number is already reserved
+      const existingOrder = await Order.findOne({
+        resName: resName,
+        tableNumber: req.body.tableNumber,
+        status: { $nin: ['Completed', 'Not Approved','Delivered'] } 
+      });
 
+      if (existingOrder) {
+        return res.status(400).json({ error: "Table number is already reserved." });
+      }
+    }
     // Determine the order location based on the shipping option
-    if (shippingOption === 'self-pickup') {
+    if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
       orderLocation = {
         type: 'Point',
         coordinates: restaurantCoordinates
       };
-    } else if (shippingOption === 'delivery') {
+    }    
+    else if (shippingOption === 'delivery') {
       if (!userLocation) {
         return res.status(400).json({ error: "User location is required for delivery option" });
       }
@@ -2287,7 +2299,7 @@ console.log('resname received in create order', resName);
     }
 
     const orderId = generateRandomOrderId(); // Assuming generateRandomOrderId is defined elsewhere
-    const order = new Order({
+    const orderDataToSave = {
       orderId: orderId,
       resName: resName,
       customerId: customerId,
@@ -2298,7 +2310,12 @@ console.log('resname received in create order', resName);
       orderLocation: orderLocation,
       createdAt: new Date(),
       orderTime: new Date()
-    });
+    };
+
+    if (shippingOption === 'dine-in' && req.body.tableNumber) {
+      orderDataToSave.tableNumber = req.body.tableNumber;
+    }
+    const order = new Order(orderDataToSave);
 
     await order.save();
 
