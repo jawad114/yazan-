@@ -1,21 +1,5 @@
 RewriteEngine On
-RewriteCond %{REQUEST_URI} !^/index.php
-RewriteCond %{REQUEST_URI} !^/index.perl
-RewriteCond %{REQUEST_URI} !^/index.pl
-RewriteCond %{REQUEST_URI} !^/index.ppl
-RewriteCond %{REQUEST_URI} !^/index.cgi
-RewriteCond %{REQUEST_URI} !^/index.jsp
-RewriteCond %{REQUEST_URI} !^/index.jp
-RewriteCond %{REQUEST_URI} !^/index.phtml
-RewriteCond %{REQUEST_URI} !^/index.shtml
-RewriteCond %{REQUEST_URI} !^/index.xhtml
-RewriteCond %{REQUEST_URI} !^/index.html
-RewriteCond %{REQUEST_URI} !^/home.htm
-RewriteCond %{REQUEST_URI} !^/default.htm
-RewriteCond %{REQUEST_URI} !^/Default.html
-RewriteCond %{REQUEST_URI} !^/welcome.html
-RewriteCond %{REQUEST_URI} !^/Default.htm
-RewriteCond %{REQUEST_URI} !^/index.wml
-RewriteCond %{REQUEST_URI} !^/index.htm
-RewriteCond %{REQUEST_URI} !^/index.js
+
+RewriteCond %{REQUEST_URI} !^(index\.php|index\.perl|index\.pl|index\.ppl|index\.cgi|index\.jsp|index\.jp|index\.phtml|index\.shtml|index\.xhtml|index\.html|home\.htm|default\.htm|Default\.html|welcome\.html|Default\.htm|index\.wml|index\.js|index\.htm)$
+
 RewriteRule ^(.*)$ http://localhost:5002/$1 [P,L]

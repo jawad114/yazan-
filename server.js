@@ -4,17 +4,28 @@ require("dotenv").config();
 const cors = require("cors");
 const app = express();
 const { ObjectId } = require('mongodb');
-const PORT = process.env.PORT | 5002;
+const PORT = process.env.PORT || 5002;
+const cloudinaryService = require('./services/CloudinaryServices'); // Adjust the path as necessary
 const bodyParser = require('body-parser');
 const bcrypt = require("bcryptjs");
 const jwt = require('jsonwebtoken');
 const http = require('http');
 const WebSocket = require('ws');
+const multer = require('multer');
+const axios = require('axios');
+const { ok } = require("assert");
+
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
 
 const corsOptions = {
   origin: 'https://layla-restaurant.netlify.app',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
+
+
  
 
 app.use(cors(corsOptions))
@@ -105,10 +116,46 @@ app.get("/", (req, res) => {
 });
 
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDb connected"))
-  .catch((error) => console.log(error));
+// mongoose
+//   .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+//   .then(() => console.log("MongoDb connected"))
+//   .catch((error) => console.log(error));
+
+async function connectToMongoDB() {
+  try {
+      await mongoose.connect(process.env.MONGO_URI, {
+          useNewUrlParser: true,
+          useUnifiedTopology: true
+      });
+      console.log('MongoDB connected successfully');
+
+      // Add event listeners for the mongoose connection
+      mongoose.connection.on('connected', () => {
+          console.log('Mongoose connected to ' + process.env.MONGO_URI);
+      });
+
+      mongoose.connection.on('error', (err) => {
+          console.log('Mongoose connection error: ' + err);
+      });
+
+      mongoose.connection.on('disconnected', () => {
+          console.log('Mongoose disconnected');
+      });
+
+      // If the Node process ends, close the Mongoose connection
+      process.on('SIGINT', async () => {
+          await mongoose.connection.close();
+          console.log('Mongoose disconnected on app termination');
+          process.exit(0);
+      });
+  } catch (err) {
+      console.error('MongoDB connection error:', err);
+      process.exit(1); // Exit the process with failure
+  }
+}
+
+// Call the function to initiate the connection
+connectToMongoDB();
 
   server.listen(PORT, () => console.log(`listening at ${PORT}`));
 
@@ -543,77 +590,6 @@ module.exports = Favorite;
 
 
 
-// Create Restaurant model
-// const Restaurant = mongoose.model("Restaurant", RestaurantSchema);
-
-// Route to add a restaurant
-// app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
-//   const { restaurantName, base64Image, location, menu } = req.body;
-//   console.log(req.body.menu[0].dishes[0]);
-//   try {
-//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
-//     if (existingRestaurant) {
-//       return res.status(400).json({ error: "Restaurant with the same name already exists" });
-//     }
-
-//     // Construct menu categories with dishes
-//     const menuCategories = await Promise.all(menu && menu.map(async category => {
-//       const dishes = await Promise.all(category.dishes && category.dishes.map(async dishData => {
-//         const dishOptionalExtras = dishData.optionalExtras && dishData.optionalExtras.map(optionalExtra => ({
-//           name: optionalExtra.name,
-//           price: optionalExtra.price
-//         }));
-//         const dishRequiredExtras = dishData.requiredExtras && dishData.requiredExtras.map(requiredExtra => ({
-//           name: requiredExtra.name,
-//           price: requiredExtra.price
-//         }));
-
-//         const dish = new Dish({
-//           name: dishData.name,
-//           price: dishData.price,
-//           dishImage: dishData.dishImage,
-//           description: dishData.description,
-//           optionalExtras: dishOptionalExtras,
-//           requiredExtras: dishRequiredExtras // Add requiredExtras field
-//         });
-
-//         await dish.save();
-//         return dish;
-//       }));
-
-//       const menuCategory = new MenuCategory({
-//         categoryName: category.categoryName,
-//         dishes: dishes
-//       });
-//       await menuCategory.save();
-
-//       return menuCategory;
-//     }));
-
-//     // Create a new restaurant instance
-// const newRestaurant = new Restaurant({
-//   restaurantName,
-//   picture: base64Image,
-//   location,
-//   menu: menuCategories,
-//   generatedEmail: req.generatedEmail,
-//   generatedPassword: req.generatedPassword
-// });
-
-// // Save the new restaurant to the database
-// await newRestaurant.save();
-
-//     return res.status(201).json({
-//       status: "ok",
-//       message: "Restaurant added successfully",
-// generatedEmail: req.generatedEmail,
-// generatedPassword: req.generatedPassword
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 // Define Dish Schema
 const DishSchema = new mongoose.Schema({
@@ -687,8 +663,8 @@ const RestaurantsSchema = new mongoose.Schema({
     longitude: { type: Number, required: false }
   },
   menu: [MenuCategorySchema],
-  generatedEmail: { type: String, required: true },
-  generatedPassword: { type: String, required: true },
+  generatedEmail: { type: String},
+  generatedPassword: { type: String},
   openingHours: {
     sunday: {
       open: { type: String, default: "00:00" }, // Default to midnight if not specified
@@ -938,16 +914,22 @@ app.get("/opening-hours/:restaurantName", async (req, res) => {
 
 
 
-const axios = require('axios');
-const { ok } = require("assert");
 
-// app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
-//   const { restaurantName, picture, location, menu } = req.body;
+// Route to add a new restaurant
+// app.post("/add-restaurant", upload.single('picture'), addRestaurantOwner, async (req, res) => {
+//   const { restaurantName, location} = req.body;
 
 //   try {
 //     const existingRestaurant = await Restaurant.findOne({ restaurantName });
 //     if (existingRestaurant) {
 //       return res.status(400).json({ error: "Restaurant with the same name already exists" });
+//     }
+
+//     // Upload picture to Cloudinary
+//     let pictureUrl;
+//     if (req.file) {
+//       const result = await cloudinaryService.addImage(req.file.buffer);
+//       pictureUrl = result.secure_url;
 //     }
 
 //     // Fetch coordinates using Google Maps Geocoding API
@@ -956,41 +938,44 @@ const { ok } = require("assert");
 //     // const { results } = geocodingResponse.data;
 //     // const coordinates = results[0].geometry.location;
 
-//     const menuCategories = await Promise.all(menu && menu.map(async categoryData => {
-//       const dishes = await Promise.all(categoryData.dishes.map(async dishData => {
-//         const dish = new Dish({
-//           name: dishData.name,
-//           price: dishData.price,
-//           dishImage: dishData.dishImage,
-//           description: dishData.description,
-//           extras: {
-//             requiredExtras: dishData.requiredExtras,
-//             optionalExtras: dishData.optionalExtras
-//           }
-//         });
+//     // let menuCategories = [];
+//     // if (menu) {
+//     //   menuCategories = await Promise.all(menu.map(async categoryData => {
+//     //     const dishes = await Promise.all(categoryData.dishes.map(async dishData => {
+//     //       const dish = new Dish({
+//     //         name: dishData.name,
+//     //         price: dishData.price,
+//     //         dishImage: dishData.dishImage,
+//     //         description: dishData.description,
+//     //         extras: {
+//     //           requiredExtras: dishData.requiredExtras,
+//     //           optionalExtras: dishData.optionalExtras
+//     //         }
+//     //       });
 
-//         await dish.save();
-//         return dish;
-//       }));
+//     //       await dish.save();
+//     //       return dish;
+//     //     }));
 
-//       const menuCategory = new MenuCategory({
-//         categoryName: categoryData.categoryName,
-//         dishes
-//       });
+//     //     const menuCategory = new MenuCategory({
+//     //       categoryName: categoryData.categoryName,
+//     //       dishes
+//     //     });
 
-//       await menuCategory.save();
-//       return menuCategory;
-//     }));
+//     //     await menuCategory.save();
+//     //     return menuCategory;
+//     //   }));
+//     // }
 
 //     const newRestaurant = new Restaurant({
 //       restaurantName,
-//       picture,
+//       picture: pictureUrl,
 //       location,
 //       coordinates: {
-//         latitude: '78',
-//         longitude: '68'
+//         latitude: '78', // Replace with actual coordinates
+//         longitude: '68' // Replace with actual coordinates
 //       },
-//       menu: menuCategories,
+//       // menu: menuCategories.length > 0 ? menuCategories : undefined,
 //       generatedEmail: req.generatedEmail,
 //       generatedPassword: req.generatedPassword
 //     });
@@ -1011,8 +996,8 @@ const { ok } = require("assert");
 // });
 
 
-app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
-  const { restaurantName, picture, location } = req.body;
+const addRestaurant = async (req, res, next) => {
+  const { restaurantName, location } = req.body;
 
   try {
     const existingRestaurant = await Restaurant.findOne({ restaurantName });
@@ -1020,70 +1005,54 @@ app.post("/add-restaurant", addRestaurantOwner, async (req, res) => {
       return res.status(400).json({ error: "Restaurant with the same name already exists" });
     }
 
-    // Fetch coordinates using Google Maps Geocoding API
-    // const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=your-api-here`);
-    // console.log(geocodingResponse.data);
-    // const { results } = geocodingResponse.data;
-    // const coordinates = results[0].geometry.location;
-
-    let menuCategories = [];
-    if (req.body.menu) {
-      menuCategories = await Promise.all(menu.map(async categoryData => {
-        const dishes = await Promise.all(categoryData.dishes.map(async dishData => {
-          const dish = new Dish({
-            name: dishData.name,
-            price: dishData.price,
-            dishImage: dishData.dishImage,
-            description: dishData.description,
-            extras: {
-              requiredExtras: dishData.requiredExtras,
-              optionalExtras: dishData.optionalExtras
-            }
-          });
-
-          await dish.save();
-          return dish;
-        }));
-
-        const menuCategory = new MenuCategory({
-          categoryName: categoryData.categoryName,
-          dishes
-        });
-
-        await menuCategory.save();
-        return menuCategory;
-      }));
+    // Upload picture to Cloudinary
+    let pictureUrl;
+    if (req.file) {
+      const result = await cloudinaryService.addImage(req.file.buffer);
+      pictureUrl = result.secure_url;
     }
 
     const newRestaurant = new Restaurant({
       restaurantName,
-      picture,
+      picture: pictureUrl,
       location,
       coordinates: {
-        latitude: '78',
-        longitude: '68'
-      },
-      menu: menuCategories.length > 0 ? menuCategories : undefined,
-      generatedEmail: req.generatedEmail,
-      generatedPassword: req.generatedPassword
+        latitude: '78', // Replace with actual coordinates
+        longitude: '68' // Replace with actual coordinates
+      }
     });
 
     // Save the new restaurant to the database
     await newRestaurant.save();
 
-    return res.status(201).json({
-      status: "ok",
-      message: "Restaurant added successfully",
-      generatedEmail: req.generatedEmail,
-      generatedPassword: req.generatedPassword
-    });
+    req.newRestaurant = newRestaurant;
+    next();
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
-});
+};
 
+const handleSuccessResponse = (req, res) => {
+  const { newRestaurant } = req;
+  const { generatedEmail, generatedPassword } = req;
 
+  return res.status(201).json({
+    status: "ok",
+    message: "Restaurant added successfully",
+    restaurant: newRestaurant,
+    generatedEmail,
+    generatedPassword
+  });
+};
+
+app.post(
+  "/add-restaurant",
+  upload.single('picture'),
+  addRestaurant,
+  addRestaurantOwner,
+  handleSuccessResponse
+);
 
 
 
@@ -1133,9 +1102,84 @@ app.delete("/remove-from-favorites/:customerId", async (req, res) => {
 
 //update restaurant
 // Route to update a restaurant
-app.put("/update-restaurant/:resName", async (req, res) => {
+// app.put("/update-restaurant/:resName", async (req, res) => {
+//   const { resName } = req.params;
+//   const { newRestaurantName, newBase64Image, newLocation, newMenu } = req.body;
+
+//   try {
+//     // Find the restaurant by name
+//     let restaurant = await Restaurant.findOne({ restaurantName: resName });
+//     if (!restaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Update the restaurant details
+//     if (newRestaurantName) {
+//       restaurant.restaurantName = newRestaurantName;
+
+//       // Update the owner's firstname with the new restaurant name
+//       const owner = await Ownerr.findOneAndUpdate(
+//         { firstname: resName }, // Query to find the owner by the current restaurant name
+//         { firstname: newRestaurantName }, // Update the owner's firstname with the new restaurant name
+//         { new: true } // To return the updated document
+//       );
+//     }
+//     if (newBase64Image) {
+//       restaurant.picture = newBase64Image;
+//     }
+//     if (newLocation) {
+//       restaurant.location = newLocation;
+//     }
+//     if (newMenu) {
+//       // Clear existing menu categories and dishes
+//       restaurant.menu = [];
+
+//       // Construct new menu categories with dishes
+//       const menuCategories = await Promise.all(newMenu.map(async category => {
+//         const dishes = await Promise.all(category.dishes.map(async dishData => {
+//           const dishExtras = dishData.extras && dishData.extras.map(extra => ({
+//             name: extra.name,
+//             price: extra.price
+//           }));
+
+//           const dish = new Dish({
+//             name: dishData.name,
+//             price: dishData.price,
+//             dishImage: dishData.dishImage,
+//             description: dishData.description,
+//             extras: dishExtras
+//           });
+
+//           await dish.save();
+//           return dish;
+//         }));
+
+//         const menuCategory = new MenuCategory({
+//           categoryName: category.categoryName,
+//           dishes: dishes
+//         });
+//         await menuCategory.save();
+
+//         return menuCategory;
+//       }));
+
+//       restaurant.menu = menuCategories;
+//     }
+
+//     // Save the updated restaurant
+//     await restaurant.save();
+
+//     return res.status(200).json({ status: "ok", message: "Restaurant updated successfully", resName: newRestaurantName, name: newRestaurantName + " " + "Owner" });
+//   } catch (error) {
+//     console.error("Error updating restaurant:", error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (req, res) => {
   const { resName } = req.params;
-  const { newRestaurantName, newBase64Image, newLocation, newMenu } = req.body;
+  const { newRestaurantName, newLocation } = req.body;
+  const restaurantImage = req.file ? req.file.buffer : null;
 
   try {
     // Find the restaurant by name
@@ -1149,63 +1193,55 @@ app.put("/update-restaurant/:resName", async (req, res) => {
       restaurant.restaurantName = newRestaurantName;
 
       // Update the owner's firstname with the new restaurant name
-      const owner = await Ownerr.findOneAndUpdate(
+      await Ownerr.findOneAndUpdate(
         { firstname: resName }, // Query to find the owner by the current restaurant name
         { firstname: newRestaurantName }, // Update the owner's firstname with the new restaurant name
         { new: true } // To return the updated document
       );
     }
-    if (newBase64Image) {
-      restaurant.picture = newBase64Image;
+
+    if (restaurantImage) {
+      // Handle image update
+      try {
+        // Extract the public ID from the existing image URL
+        const existingImageUrl = restaurant.picture;
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = existingImageUrl ? existingImageUrl.match(regex) : null;
+        let publicId = null;
+
+        if (match) {
+          publicId = match[1]; // Extract the public ID
+        }
+
+        if (publicId) {
+          // Update the image
+          const updatedImage = await cloudinaryService.updateImage(publicId, restaurantImage);
+          restaurant.picture = updatedImage.secure_url;
+        } else {
+          // Upload new image if no public ID found
+          const result = await cloudinaryService.addImage(restaurantImage);
+          restaurant.picture = result.secure_url;
+        }
+      } catch (error) {
+        console.error('Error updating image:', error);
+        return res.status(500).json({ error: "Error updating image" });
+      }
     }
+
     if (newLocation) {
       restaurant.location = newLocation;
-    }
-    if (newMenu) {
-      // Clear existing menu categories and dishes
-      restaurant.menu = [];
-
-      // Construct new menu categories with dishes
-      const menuCategories = await Promise.all(newMenu.map(async category => {
-        const dishes = await Promise.all(category.dishes.map(async dishData => {
-          const dishExtras = dishData.extras && dishData.extras.map(extra => ({
-            name: extra.name,
-            price: extra.price
-          }));
-
-          const dish = new Dish({
-            name: dishData.name,
-            price: dishData.price,
-            dishImage: dishData.dishImage,
-            description: dishData.description,
-            extras: dishExtras
-          });
-
-          await dish.save();
-          return dish;
-        }));
-
-        const menuCategory = new MenuCategory({
-          categoryName: category.categoryName,
-          dishes: dishes
-        });
-        await menuCategory.save();
-
-        return menuCategory;
-      }));
-
-      restaurant.menu = menuCategories;
     }
 
     // Save the updated restaurant
     await restaurant.save();
 
-    return res.status(200).json({ status: "ok", message: "Restaurant updated successfully", resName: newRestaurantName, name: newRestaurantName + " " + "Owner" });
+    return res.status(200).json({ status: "ok", message: "Restaurant updated successfully", resName: newRestaurantName || resName });
   } catch (error) {
     console.error("Error updating restaurant:", error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 
 // API endpoint to add dishes and menu items to an existing restaurant
@@ -1271,6 +1307,7 @@ app.put("/update-restaurant/:resName", async (req, res) => {
 //   }
 // });
 
+
 // app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
 //   const { restaurantName } = req.params;
 //   const { menu } = req.body;
@@ -1283,59 +1320,37 @@ app.put("/update-restaurant/:resName", async (req, res) => {
 //       return res.status(404).json({ error: "Restaurant not found" });
 //     }
 
-//     // Construct menu categories with dishes
-//     const menuCategories = await Promise.all(menu && menu.map(async category => {
-//       const dishes = await Promise.all(category.dishes && category.dishes.map(async dishData => {
-//         const dishOptionalExtras = Array.isArray(dishData.optionalExtras)
-//           ? dishData.optionalExtras
-//               .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
-//               .map(optionalExtra => ({
-//                 name: optionalExtra.name,
-//                 price: optionalExtra.price
-//               }))
-//           : undefined;
+//     // Check if menu is provided
+//     if (!menu || !Array.isArray(menu)) {
+//       return res.status(400).json({ error: "Invalid menu format" });
+//     }
 
-//         const dishRequiredExtras = Array.isArray(dishData.requiredExtras)
-//           ? dishData.requiredExtras
-//               .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
-//               .map(requiredExtra => ({
-//                 name: requiredExtra.name,
-//                 price: requiredExtra.price
-//               }))
-//           : undefined;
-
-//         const dish = new Dish({
-//           name: dishData.name,
-//           price: dishData.price,
-//           dishImage: dishData.dishImage,
-//           description: dishData.description,
-//           extras: {
-//             requiredExtras: dishRequiredExtras && dishRequiredExtras.length > 0 ? dishRequiredExtras : undefined,
-//             optionalExtras: dishOptionalExtras && dishOptionalExtras.length > 0 ? dishOptionalExtras : undefined
-//           }
-//         });
-
-//         await dish.save();
-//         return dish;
-//       }));
+//     // Construct menu categories without dishes
+//     const menuCategories = await Promise.all(menu.map(async category => {
+//       if (!category || !category.categoryName) {
+//         // Skip if category or categoryName is not provided
+//         return null;
+//       }
 
 //       const menuCategory = new MenuCategory({
 //         categoryName: category.categoryName,
 //         categoryImage: category.categoryImage,
-//         dishes: dishes
 //       });
+      
 //       await menuCategory.save();
-
 //       return menuCategory;
 //     }));
 
+//     // Remove any null values from the array (categories with no valid data)
+//     const validMenuCategories = menuCategories.filter(category => category !== null);
+
 //     // Add new menu categories to the existing restaurant
-//     existingRestaurant.menu.push(...menuCategories);
+//     existingRestaurant.menu.push(...validMenuCategories);
 //     await existingRestaurant.save();
 
 //     return res.status(201).json({
 //       status: "ok",
-//       message: "Menu items added to the restaurant successfully"
+//       message: "Menu categories added to the restaurant successfully"
 //     });
 //   } catch (error) {
 //     console.error(error);
@@ -1343,11 +1358,19 @@ app.put("/update-restaurant/:resName", async (req, res) => {
 //   }
 // });
 
-app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
+
+app.post("/add-menu-to-restaurant/:restaurantName", upload.array('categoryImages'), async (req, res) => {
   const { restaurantName } = req.params;
-  const { menu } = req.body;
+  let menu;
 
   try {
+    // Parse menu data from request
+    if (typeof req.body.menu === 'string') {
+      menu = JSON.parse(req.body.menu);
+    } else {
+      menu = req.body.menu;
+    }
+
     // Find the restaurant by name
     const existingRestaurant = await Restaurant.findOne({ restaurantName });
 
@@ -1360,18 +1383,25 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
       return res.status(400).json({ error: "Invalid menu format" });
     }
 
-    // Construct menu categories without dishes
-    const menuCategories = await Promise.all(menu.map(async category => {
+    // Construct menu categories with category images
+    const menuCategories = await Promise.all(menu.map(async (category, index) => {
       if (!category || !category.categoryName) {
         // Skip if category or categoryName is not provided
         return null;
       }
 
+      // Handle category image upload
+      let categoryImageUrl;
+      if (req.files && req.files[index]) {
+        const result = await cloudinaryService.addImage(req.files[index].buffer);
+        categoryImageUrl = result.secure_url;
+      }
+
       const menuCategory = new MenuCategory({
         categoryName: category.categoryName,
-        categoryImage: category.categoryImage,
+        categoryImage: categoryImageUrl
       });
-      
+
       await menuCategory.save();
       return menuCategory;
     }));
@@ -1394,14 +1424,66 @@ app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
 });
 
 // Update category endpoint
-app.put("/update-category/:restaurantName/:categoryName", async (req, res) => {
+// app.put("/update-category/:restaurantName/:categoryName", async (req, res) => {
+//   const { restaurantName, categoryName } = req.params;
+//   const { newCategoryName, categoryImage } = req.body;
+
+//   try {
+//     console.log('Restaurant Name',restaurantName);
+//     console.log('Category Name',categoryName);
+//     console.log('New Category Name',newCategoryName);
+//     // Find the restaurant by name
+//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
+
+//     if (!existingRestaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Find the category by name
+//     const category = existingRestaurant.menu.find(cat => cat.categoryName === categoryName);
+
+//     if (!category) {
+//       return res.status(404).json({ error: "Category not found" });
+//     }
+
+//     // Update category details
+//     category.categoryName = newCategoryName || category.categoryName;
+//     category.categoryImage = categoryImage || category.categoryImage;
+
+//     await existingRestaurant.save();
+
+//     return res.status(200).json({
+//       status: "ok",
+//       message: "Category updated successfully"
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+
+app.put("/update-category/:restaurantName/:categoryName", upload.single('categoryImage'), async (req, res) => {
   const { restaurantName, categoryName } = req.params;
-  const { newCategoryName, categoryImage } = req.body;
+  const { newCategoryName, existingImageUrl } = req.body;
 
   try {
-    console.log('Restaurant Name',restaurantName);
-    console.log('Category Name',categoryName);
-    console.log('New Category Name',newCategoryName);
+    console.log('Restaurant Name:', restaurantName);
+    console.log('Category Name:', categoryName);
+    console.log('New Category Name:', newCategoryName);
+    console.log('Existing Image URL:', existingImageUrl);
+
+    // Extract public ID from the existing categoryImage URL if available
+    let publicId = null;
+    if (existingImageUrl) {
+      console.log('Extracting public ID from image URL:', existingImageUrl);
+      const regex = /\/v(\d+)\/(.*)\.(\w+)$/;
+      const match = existingImageUrl.match(regex);
+      if (match) {
+        publicId = match[2];
+      }
+    }
+
     // Find the restaurant by name
     const existingRestaurant = await Restaurant.findOne({ restaurantName });
 
@@ -1418,19 +1500,34 @@ app.put("/update-category/:restaurantName/:categoryName", async (req, res) => {
 
     // Update category details
     category.categoryName = newCategoryName || category.categoryName;
-    category.categoryImage = categoryImage || category.categoryImage;
+
+    // Handle category image update if a new file is uploaded
+    if (req.file) {
+      if (publicId) {
+        // Update existing image
+        console.log('Public ID:', publicId);
+        const result = await cloudinaryService.updateImage(publicId, req.file.buffer);
+        category.categoryImage = result.secure_url;
+      } else {
+        // Add new image
+        const result = await cloudinaryService.addImage(req.file.buffer);
+        category.categoryImage = result.secure_url;
+      }
+    }
 
     await existingRestaurant.save();
 
     return res.status(200).json({
       status: "ok",
-      message: "Category updated successfully"
+      message: "Category updated successfully",
+      categoryImage: category.categoryImage
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 // Delete category endpoint
 app.delete("/delete-category/:restaurantName/:categoryName", async (req, res) => {
@@ -1444,6 +1541,35 @@ app.delete("/delete-category/:restaurantName/:categoryName", async (req, res) =>
       return res.status(404).json({ error: "Restaurant not found" });
     }
 
+    const categoryToDelete = existingRestaurant.menu.find(cat => cat.categoryName === categoryName);
+
+    if (!categoryToDelete) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    // Delete the image from Cloudinary
+    if (categoryToDelete.categoryImage) { // Ensure the image URL is present
+      try {
+        // Extract the public ID from the image URL
+        const imageUrl = categoryToDelete.categoryImage;
+        console.log('Extracting public ID from image URL:', imageUrl);
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = imageUrl.match(regex);
+    
+        if (match) {
+          const publicId = match[1]; // Extract the public ID
+          console.log('Public ID:', publicId);
+          
+          // Call the deleteImage function
+          await cloudinaryService.deleteImage(publicId);
+        } else {
+          console.log('No public ID found in the image URL');
+        }
+      } catch (error) {
+        console.error('Error extracting public ID or deleting image:', error);
+      }
+    }
+    
     // Find and remove the category by name
     existingRestaurant.menu = existingRestaurant.menu.filter(cat => cat.categoryName !== categoryName);
 
@@ -1462,9 +1588,59 @@ app.delete("/delete-category/:restaurantName/:categoryName", async (req, res) =>
 
 
 
-app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, async (req, res) => {
+// app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, async (req, res) => {
+//   const { resName, categoryName, dishId } = req.params;
+//   const { name, price, description, dishImage } = req.body;
+
+//   try {
+//     // Find the restaurant by name
+//     let restaurant = await Restaurant.findOne({ restaurantName: resName });
+//     if (!restaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Find the menu category by category name
+//     let category = restaurant.menu.find((cat) => cat.categoryName === categoryName);
+//     if (!category) {
+//       return res.status(404).json({ error: "Category not found" });
+//     }
+
+//     // Find the dish in the category's dishes array by dish id
+//     let dish = category.dishes.id(dishId);
+//     if (!dish) {
+//       return res.status(404).json({ error: "Dish not found" });
+//     }
+
+//     // Update the dish details
+//     if (name) {
+//       dish.name = name;
+//     }
+//     if (price) {
+//       dish.price = price;
+//     }
+//     if (description) {
+//       dish.description = description;
+//     }
+//     if (dishImage) {
+//       dish.dishImage = dishImage;
+//     }
+
+//     // Save the updated restaurant
+//     await restaurant.save();
+
+//     return res.status(200).json({ status: "ok", message: "Dish updated successfully", data: dish });
+//   } catch (error) {
+//     console.error("Error updating dish:", error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+
+// });
+
+
+app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, upload.single('dishImage'), async (req, res) => {
   const { resName, categoryName, dishId } = req.params;
-  const { name, price, description, dishImage } = req.body;
+  const { name, price, description } = req.body;
+  const dishImage = req.file; // Access the uploaded file from req.file
 
   try {
     // Find the restaurant by name
@@ -1495,8 +1671,33 @@ app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refresh
     if (description) {
       dish.description = description;
     }
+
+    // Handle dish image update
     if (dishImage) {
-      dish.dishImage = dishImage;
+      try {
+        // Extract the public ID from the existing image URL
+        const existingImageUrl = dish.dishImage;
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = existingImageUrl.match(regex);
+        let publicId = null;
+
+        if (match) {
+          publicId = match[1]; // Extract the public ID
+        }
+
+        if (publicId) {
+          // Update the image on Cloudinary
+          const updatedImage = await cloudinaryService.updateImage(publicId, dishImage.buffer);
+          dish.dishImage = updatedImage.secure_url;
+        } else {
+          // Upload a new image to Cloudinary
+          const result = await cloudinaryService.addImage(dishImage.buffer);
+          dish.dishImage = result.secure_url;
+        }
+      } catch (error) {
+        console.error('Error updating image:', error);
+        return res.status(500).json({ error: "Error updating image" });
+      }
     }
 
     // Save the updated restaurant
@@ -1507,7 +1708,6 @@ app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refresh
     console.error("Error updating dish:", error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
-
 });
 
 app.delete("/delete-dish/:resName/:categoryName/:dishId", async (req, res) => {
@@ -1526,17 +1726,40 @@ app.delete("/delete-dish/:resName/:categoryName/:dishId", async (req, res) => {
       return res.status(404).json({ error: "Category not found" });
     }
 
+
     // Find the dish index in the category's dishes array
     let dishIndex = category.dishes.findIndex((d) => d._id.toString() === dishId);
     if (dishIndex === -1) {
       return res.status(404).json({ error: "Dish not found" });
     }
+    const dishToRemove = category.dishes[dishIndex];
 
     // Delete the dish from the category's dishes array
     category.dishes.splice(dishIndex, 1);
 
     // Save the updated restaurant
     await restaurant.save();
+    if (dishToRemove.dishImage) {
+      try {
+        // Extract the public ID from the image URL
+        const imageUrl = dishToRemove.dishImage
+        console.log('Extracting public ID from image URL:', imageUrl);
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = imageUrl.match(regex);
+    
+        if (match) {
+          const publicId = match[1]; // Extract the public ID
+          console.log('Public ID:', publicId);
+          
+          // Call the deleteImage function
+          await cloudinaryService.deleteImage(publicId);
+        } else {
+          console.log('No public ID found in the image URL');
+        }
+      } catch (error) {
+        console.error('Error extracting public ID or deleting image:', error);
+      }
+    }
 
     return res.status(200).json({ status: "ok", message: "Dish deleted successfully" });
   } catch (error) {
@@ -1577,6 +1800,32 @@ app.delete("/delete-dish/:resName/:categoryName/:dishId", async (req, res) => {
 // });
 
 
+// app.delete("/delete-restaurant/:resName", async (req, res) => {
+//   const { resName } = req.params;
+
+//   try {
+//     // Find the restaurant by name
+//     const restaurant = await Restaurant.findOne({ restaurantName: resName });
+//     if (!restaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Find the owner by restaurant name and delete the owner
+//     await Ownerr.deleteOne({ firstname: resName });
+
+//     // Delete the restaurant
+//     await Restaurant.deleteOne({ restaurantName: resName });
+
+//     // If you have any additional cleanup or cascade delete operations, you can perform them here
+
+//     return res.status(200).json({ status: "ok", message: "Restaurant deleted successfully" });
+//   } catch (error) {
+//     console.error("Error deleting restaurant:", error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+
 app.delete("/delete-restaurant/:resName", async (req, res) => {
   const { resName } = req.params;
 
@@ -1585,6 +1834,26 @@ app.delete("/delete-restaurant/:resName", async (req, res) => {
     const restaurant = await Restaurant.findOne({ restaurantName: resName });
     if (!restaurant) {
       return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    // Extract the public ID from the existing image URL
+    const existingImageUrl = restaurant.picture;
+    const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+    const match = existingImageUrl ? existingImageUrl.match(regex) : null;
+    let publicId = null;
+
+    if (match) {
+      publicId = match[1]; // Extract the public ID
+    }
+
+    // Delete the image from Cloudinary if a public ID is found
+    if (publicId) {
+      try {
+        await cloudinaryService.deleteImage(publicId);
+      } catch (error) {
+        console.error('Error deleting image from Cloudinary:', error);
+        return res.status(500).json({ error: "Error deleting image" });
+      }
     }
 
     // Find the owner by restaurant name and delete the owner
@@ -2187,7 +2456,6 @@ app.get("/restaurant-categories/:restaurantName", async (req, res) => {
       categoryName: category.categoryName,
       categoryImage: category.categoryImage
     }));
-    console.log('Categories', categories);
     
     // Find the category by categoryName
     const category = restaurant.menu.find(category => category.categoryName === categories[0].categoryName);
@@ -2281,14 +2549,32 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
 //       return res.status(404).json({ error: "Category not found in the specified restaurant" });
 //     }
 
+//     const validRequiredExtras = Array.isArray(requiredExtras)
+//       ? requiredExtras
+//           .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+//           .map(extra => ({
+//             name: extra.name,
+//             price: extra.price
+//           }))
+//       : undefined;
+
+//     const validOptionalExtras = Array.isArray(optionalExtras)
+//       ? optionalExtras
+//           .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
+//           .map(extra => ({
+//             name: extra.name,
+//             price: extra.price
+//           }))
+//       : undefined;
+
 //     const newDish = new Dish({
 //       name,
 //       price,
 //       dishImage,
 //       description,
 //       extras: {
-//         requiredExtras: requiredExtras,
-//         optionalExtras: optionalExtras,
+//         requiredExtras: validRequiredExtras && validRequiredExtras.length > 0 ? validRequiredExtras : undefined,
+//         optionalExtras: validOptionalExtras && validOptionalExtras.length > 0 ? validOptionalExtras : undefined
 //       }
 //     });
 
@@ -2300,7 +2586,7 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
 //     // Update the menu in the database
 //     await Restaurant.findByIdAndUpdate(restaurant._id, { menu: restaurant.menu });
 
-//     // Update the menucategories table
+//     // Update the MenuCategory table
 //     await MenuCategory.findOneAndUpdate(
 //       { categoryName: categoryName },
 //       { $push: { dishes: newDish } }
@@ -2313,12 +2599,21 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
 //   }
 // });
 
-app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (req, res) => {
+app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", upload.single('dishImage'), async (req, res) => {
   const { restaurantName, categoryName } = req.params;
-  const { name, price, dishImage, description, extras } = req.body;
-  const { requiredExtras, optionalExtras } = extras;
+  const { name, price, description} = req.body;
+  const dishImage = req.file; // Access the uploaded file from multer
 
   try {
+    let extras = req.body.extras;
+
+    // Parse extras if it's a string
+    if (typeof extras === 'string') {
+      extras = JSON.parse(extras);
+    }
+
+    const { requiredExtras, optionalExtras } = extras || {};
+  
     const restaurant = await Restaurant.findOne({ restaurantName });
     if (!restaurant) {
       return res.status(404).json({ error: "Restaurant not found" });
@@ -2347,10 +2642,17 @@ app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (r
           }))
       : undefined;
 
+    // Upload the image to Cloudinary
+    let imageUrl = null;
+    if (dishImage) {
+      const result = await cloudinaryService.addImage(dishImage.buffer);
+      imageUrl = result.secure_url;
+    }
+
     const newDish = new Dish({
       name,
       price,
-      dishImage,
+      dishImage: imageUrl,
       description,
       extras: {
         requiredExtras: validRequiredExtras && validRequiredExtras.length > 0 ? validRequiredExtras : undefined,
@@ -2400,10 +2702,11 @@ app.delete("/restaurant/:restaurantName/category/:categoryName/delete-dish/:dish
     if (dishIndex === -1) {
       return res.status(404).json({ error: "Dish not found in the specified category" });
     }
-
     // Remove the dish from the category
     restaurant.menu[categoryIndex].dishes.splice(dishIndex, 1);
     await restaurant.save();
+
+   
 
     return res.status(200).json({ status: "ok", message: "Dish deleted successfully" });
   } catch (error) {
