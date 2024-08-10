@@ -27,7 +27,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
-
+ 
  
 
 app.use(cors(corsOptions))
@@ -266,6 +266,10 @@ const SliderImageSchema = new mongoose.Schema({
       type: String,
       required: false
   },
+  url:{
+    type: String,
+    required: false
+  },
   imageUrl: {
       type: String,
       required: true
@@ -277,7 +281,7 @@ const SliderImage = mongoose.model('SliderImage', SliderImageSchema);
 
 app.post('/addImage' , upload.single('carouselImage'), async (req, res) => {
   try {
-      const { title } = req.body;
+      const { title,url } = req.body;
       const carouselImage = req.file;
     let imageUrl = null;
     if (carouselImage) {
@@ -287,6 +291,7 @@ app.post('/addImage' , upload.single('carouselImage'), async (req, res) => {
 
       const newSliderImage = new SliderImage({
           title,
+          url,
           imageUrl
       });
 
@@ -309,7 +314,7 @@ app.get('/allImages', async (req, res) => {
 
 app.put('/image/:id', upload.single('carouselImage'), async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title,url } = req.body;
     const carouselImage = req.file;
     
     let carousel = await SliderImage.findById(req.params.id);
@@ -349,6 +354,7 @@ app.put('/image/:id', upload.single('carouselImage'), async (req, res) => {
     // Update only the provided fields
     const updateData = {};
     if (title) updateData.title = title;
+    if (url) updateData.url = url;
     if (imageUrl) updateData.imageUrl = imageUrl;
 
     const updatedSliderImage = await SliderImage.findByIdAndUpdate(
@@ -1441,11 +1447,18 @@ app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (
         { firstname: resName }, // Query to find the owner by the current restaurant name
         { 
           firstname: newRestaurantName, // Update the owner's firstname with the new restaurant name
-          email: email // Update the owner's email with the new format
         },
         { new: true } // To return the updated document
-      );      
+      );   
+      await Favorite.updateMany(
+        { restaurantName: resName }, // Match documents with the current restaurant name
+        {
+          $set: { restaurantName: newRestaurantName } // Update the restaurant name
+        },
+        { new: true } // Optionally return the modified documents (not necessary with updateMany)
+      );   
     }
+   
 
     if (restaurantImage) {
       // Handle image update
@@ -2105,7 +2118,10 @@ app.delete("/delete-restaurant/:resName", async (req, res) => {
 
     // Find the owner by restaurant name and delete the owner
     await Ownerr.deleteOne({ firstname: resName });
-
+    await Favorite.deleteMany(
+      { restaurantName: resName } // Match documents with the specific restaurant name
+    );
+    
     // Delete the restaurant
     await Restaurant.deleteOne({ restaurantName: resName });
 
@@ -2965,7 +2981,7 @@ app.get("/orders/:resName", async (req, res) => {
   console.log('Res Name passing in backend for fetching res specific order', resName);
   
   try {
-    const orders = await Order.find({ resName: { $regex: new RegExp(`^${resName}$`, 'i') } });
+    const orders = await Order.find({ 'products.orderFrom': { $regex: new RegExp(`^${resName}$`, 'i') } });
     if (orders.length === 0) {
       console.log('No orders found');
       return res.status(404).json({ status: "error", message: "No orders found for the specified restaurant name" });
@@ -3097,9 +3113,11 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
     }
 
     const products = category.dishes; // Assuming dishes are the products
+    const categoryImage = category.categoryImage; // Get category image
+
     console.log(category)
 
-    return res.status(200).json({ status: "ok", products,restaurantImage });
+    return res.status(200).json({ status: "ok", products,restaurantImage,categoryImage });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -3491,7 +3509,7 @@ app.post('/api/orders/completed', async (req, res) => {
     };
 
     if (restaurantName) {
-      query.resName = restaurantName;
+      query['products.orderFrom'] = new RegExp(`^${restaurantName}$`, 'i');
     }
 
     const filteredOrders = await Order.find(query);
@@ -3550,7 +3568,7 @@ app.post('/api/revenue', async (req, res) => {
     };
 
     if (restaurantName) {
-      query.resName = restaurantName;
+      query['products.orderFrom'] = new RegExp(`^${restaurantName}$`, 'i');
     }
 
     const orders = await Order.find(query);
@@ -3561,9 +3579,9 @@ app.post('/api/revenue', async (req, res) => {
 
     const orderDetails = orders.map(order => {
       const orderTotalPrice = order.products.reduce((total, product) => {
-        let totalPrice = product.price * product.quantity;
+        let totalPrice = product.quantity * product.price;
         if (product.extras && product.extras.length > 0) {
-          totalPrice += product.extras.reduce((acc, extra) => acc + extra.price, 0);
+          totalPrice += product.quantity * product.extras.reduce((acc, extra) => acc + extra.price, 0);
         }
         return total + totalPrice;
       }, 0);
