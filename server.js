@@ -14,6 +14,8 @@ const WebSocket = require('ws');
 const multer = require('multer');
 const axios = require('axios');
 const { ok } = require("assert");
+const cron = require('node-cron');
+const moment = require('moment-timezone');
 
 
 const storage = multer.memoryStorage();
@@ -548,7 +550,7 @@ const addRestaurantOwner = async (req, res, next) => {
 
     const password = generateRandomPassword();
 
-    const email = `${restaurantName.replace(/\s+/g, '')}@delivery.com`;
+    const email = `${restaurantName.replace(/\s+/g, '')}@layla.com`;
 
     const encryptedPassword = await bcrypt.hash(password, 10);
 
@@ -711,31 +713,27 @@ const Dish = mongoose.model("Dish", DishSchema);
 const MenuCategory = mongoose.model("MenuCategory", MenuCategorySchema);
 
 
-const cron = require('node-cron');
 
-// Import necessary modules
-// Import the moment-timezone library
-const moment = require('moment-timezone');
 
-// Define the server timezone (e.g., 'Asia/Bahrain')
 
-// const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-// if (userTimezone !== serverTimezone) {
-//     console.log(`Warning: Your device timezone (${userTimezone}) is different from the server timezone (${serverTimezone}).`);
-// }
+console.log('Server timezone: ' + serverTimezone);
 
-// Set up the cron job to run every 3 minutes
 cron.schedule('*/3 * * * *', async () => {
   try {
     // Get the current time in the server's timezone
     const currentTime = moment().tz(serverTimezone);
 
-    // Get the current day and hour
-    let currentDay = currentTime.format("dddd").toLowerCase();
+    // Get the current day and time (hour and minute)
+    const currentDay = currentTime.format("dddd").toLowerCase();
     const currentHour = currentTime.hour();
-    console.log(currentHour);
+    const currentMinute = currentTime.minute();
+
+    console.log('Current Time', currentTime.format('HH:mm'));
+    console.log('Current Hour', currentHour);
+    console.log('Current Minute', currentMinute);
+    console.log('Current Day', currentDay);
 
     // Find all restaurants
     const restaurants = await Restaurant.find();
@@ -749,9 +747,10 @@ cron.schedule('*/3 * * * *', async () => {
         // Extract the open and close hours
         const { open, close } = openingHours;
 
-        // Convert opening and closing hours to numerical values
-        const openHour = parseInt(open.split(":")[0], 10);
-        const closeHour = parseInt(close.split(":")[0], 10);
+        // Convert opening and closing hours to numerical values for comparison
+        const [openHour, openMinute] = open.split(":").map(Number);
+        const [closeHour, closeMinute] = close.split(":").map(Number);
+
 
         // Check if the restaurant is already marked as busy
         if (restaurant.status === 'busy') {
@@ -759,16 +758,19 @@ cron.schedule('*/3 * * * *', async () => {
           continue; // Skip to the next restaurant
         }
 
+        // Determine if the current time is within the opening hours
+        const isOpen = 
+          (currentHour > openHour || (currentHour === openHour && currentMinute >= openMinute)) &&
+          (currentHour < closeHour || (currentHour === closeHour && currentMinute <= closeMinute));
+
         // Update the status based on the current time
-        if (currentHour >= openHour && currentHour < closeHour) {
-          // If the current time falls within opening hours
+        if (isOpen) {
           if (restaurant.status !== 'open') {
             restaurant.status = 'open';
             await restaurant.save();
             console.log(`Restaurant ${restaurant.restaurantName} is now open.`);
           }
         } else {
-          // If the current time falls outside opening hours
           if (restaurant.status !== 'closed') {
             restaurant.status = 'closed';
             await restaurant.save();
@@ -781,6 +783,7 @@ cron.schedule('*/3 * * * *', async () => {
     console.error('Error updating restaurant statuses:', error);
   }
 });
+
 
 
 
@@ -1192,11 +1195,16 @@ app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (
       restaurant.restaurantName = newRestaurantName;
 
       // Update the owner's firstname with the new restaurant name
+      const email = `${newRestaurantName.replace(/\s+/g, '')}@layla.com`;
+
       await Ownerr.findOneAndUpdate(
         { firstname: resName }, // Query to find the owner by the current restaurant name
-        { firstname: newRestaurantName }, // Update the owner's firstname with the new restaurant name
+        { 
+          firstname: newRestaurantName, // Update the owner's firstname with the new restaurant name
+          email: email // Update the owner's email with the new format
+        },
         { new: true } // To return the updated document
-      );
+      );      
     }
 
     if (restaurantImage) {
@@ -1959,10 +1967,6 @@ const CartSchema = new mongoose.Schema({
     ref: 'Customer',
     required: true
   },
-  orderFrom: {
-    type: String,
-    required: true
-  },
   coordinates: {
     latitude: { type: Number, required: false },
     longitude: { type: Number, required: false }
@@ -1973,11 +1977,19 @@ const CartSchema = new mongoose.Schema({
       ref: 'Product',
       required: true
     },
+    orderFrom: {
+      type: String,
+      required: true
+    },
     quantity: {
       type: Number,
       required: true
     },
     name: {
+      type: String,
+      required: true
+    },
+    dishImage:{
       type: String,
       required: true
     },
@@ -2001,13 +2013,13 @@ const CartSchema = new mongoose.Schema({
 const Cart = mongoose.model("Cart", CartSchema);
 
 app.post("/add-to-cart/:customerId", async (req, res) => {
-  const { productId, quantity, name, description, price, extras,orderFrom,coordinates } = req.body;
+  const { productId,dishImage, quantity, name, description, price, extras,orderFrom,coordinates } = req.body;
   const { customerId } = req.params;
 console.log('Res Name',orderFrom);
   try {
-    let cart = await Cart.findOne({ customerId });
+    let cart = await Cart.findOne({ customerId, orderFrom });
     if (!cart) {
-      cart = new Cart({ customerId,orderFrom,coordinates ,products: [] });
+      cart = new Cart({ customerId,coordinates ,products: [] });
     }
 
     const existingProductIndex = cart.products.findIndex(product => product.productId.toString() === productId);
@@ -2016,7 +2028,7 @@ console.log('Res Name',orderFrom);
       cart.products[existingProductIndex].quantity += quantity;
     } else {
       // If product does not exist, add it with given quantity, name, description, price, and extras
-      cart.products.push({ productId, quantity, name, description, price, extras });
+      cart.products.push({ productId, quantity,dishImage,orderFrom, name, description, price, extras });
     }
 
     await cart.save();
@@ -2038,46 +2050,54 @@ console.log('Res Name',orderFrom);
 // authenticateUser, refreshAuthToken
 app.delete("/clear-cart/:customerId", async (req, res) => {
   const { customerId } = req.params;
+
   try {
-    let cart = await Cart.findOne({ customerId });
-    if (!cart) {
-      return res.status(404).json({ error: "Cart not found" });
+    // Find and delete all carts for the given customer
+    const result = await Cart.deleteMany({ customerId });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "No carts found for this customer" });
     }
 
-    // Clear all products from the cart
-    cart.products = [];
-
-    await cart.save();
-
-    res.status(200).json({ status: "ok", message: "Cart cleared successfully" });
+    res.status(200).json({ status: "ok", message: "All carts cleared successfully" });
   } catch (error) {
-    console.error("Error clearing cart:", error);
+    console.error("Error clearing carts:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 // delete from cart
 app.delete("/remove-from-cart/:productId/:customerId", async (req, res) => {
   const { productId, customerId } = req.params;
 
   try {
-    let cart = await Cart.findOne({ customerId });
-    if (!cart) {
-      return res.status(404).json({ error: "Cart not found" });
+    // Find all carts for the given customer
+    const carts = await Cart.find({ customerId });
+    if (carts.length === 0) {
+      return res.status(404).json({ error: "No carts found for this customer" });
     }
 
-    const productIndex = cart.products.findIndex(product => product.productId.toString() === productId);
-    if (productIndex === -1) {
-      return res.status(404).json({ error: "Product not found in the cart" });
+    let productRemoved = false;
+
+    // Iterate through each cart to find and remove the product
+    for (let cart of carts) {
+      const productIndex = cart.products.findIndex(product => product._id.toString() === productId);
+
+      if (productIndex !== -1) {
+        cart.products.splice(productIndex, 1);
+        await cart.save();
+        productRemoved = true;
+      }
     }
 
-    cart.products.splice(productIndex, 1);
+    if (!productRemoved) {
+      return res.status(404).json({ error: "Product not found in any cart" });
+    }
 
-    await cart.save();
-
-    res.status(200).json({ status: "ok", message: "Product removed from cart", id: cart.customerId, products: cart.products });
+    res.status(200).json({ status: "ok", message: "Product removed from all carts", customerId });
   } catch (error) {
-    console.error("Error removing product from cart:", error);
+    console.error("Error removing product from carts:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -2106,12 +2126,17 @@ app.get("/get-cart/:customerId", async (req, res) => {
   const { customerId } = req.params;
 
   try {
-    const cart = await Cart.findOne({ customerId });
-    if (!cart) {
-      return res.status(404).json({ error: "Cart not found" });
+    // Find all carts for the customerId
+    const cart = await Cart.find({ customerId });
+
+    if (cart.length === 0) {
+      return res.status(404).json({ error: "No carts found for this customer" });
     }
 
-    const totalItemsCount = cart.products.reduce((acc, product) => acc + product.quantity, 0);
+    // Calculate the total number of items across all carts
+    const totalItemsCount = cart.reduce((totalCount, carts) => {
+      return totalCount + carts.products.reduce((acc, product) => acc + product.quantity, 0);
+    }, 0);
 
     // Send WebSocket message to notify clients of cart update
     wss.clients.forEach(function each(client) {
@@ -2122,10 +2147,61 @@ app.get("/get-cart/:customerId", async (req, res) => {
 
     res.status(200).json({ cart, totalItemsCount });
   } catch (error) {
-    console.error("Error fetching cart:", error);
+    console.error("Error fetching carts:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+
+app.put('/update-cart/:productId', async (req, res) => {
+  const { productId } = req.params; // Get productId from request params
+  const { quantity, customerId } = req.body; // Get the updated quantity and customerId from the request body
+
+  console.log('Received productId:', productId);
+  console.log('Received quantity:', quantity);
+  console.log('Received customerId:', customerId);
+
+  if (!quantity || !customerId) {
+    console.error('Missing quantity or customerId');
+    return res.status(400).json({ error: 'Quantity and customerId are required' });
+  }
+
+  try {
+    // Find all carts for the given customer
+    const carts = await Cart.find({ customerId });
+    if (carts.length === 0) {
+      console.error('No carts found for customerId:', customerId);
+      return res.status(404).json({ error: 'No carts found for this customer' });
+    }
+
+    let updated = false;
+
+    // Iterate through each cart to find and update the product
+    for (let cart of carts) {
+      const product = cart.products.find(p => p._id.toString() === productId);
+
+      if (product) {
+        // Update the quantity of the found product
+        product.quantity = quantity;
+        await cart.save();
+        updated = true;
+      }
+    }
+
+    if (!updated) {
+      console.error('Product not found in any cart with productId:', productId);
+      return res.status(404).json({ error: 'Product not found in any cart' });
+    }
+
+    res.status(200).json({ message: 'Cart item updated successfully' });
+  } catch (error) {
+    console.error('Error updating cart item:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+
 
 
 
@@ -2155,11 +2231,11 @@ app.get("/dishes/:dishId", async (req, res) => {
 const OrderSchema = new mongoose.Schema({
   orderId: String,
   restaurantId: String, // Added restaurantId field
-  resName: String,
   customerId: String,
   products: [{
     productId: String,
     quantity: Number,
+    orderFrom: String,
     price: Number,
     name: String,
     extras: {
@@ -2238,99 +2314,375 @@ const Order = mongoose.model("Order", OrderSchema);
 
 
 // Endpoint to create an order
+// app.post("/create-order/:customerId", async (req, res) => {
+//   const { customerId } = req.params;
+
+//   try {
+//     const { products, shippingInfo, shippingOption, userLocation } = req.body;
+//     let orderLocation;
+// const status = '';
+//     // Fetch the restaurant details from the database
+//     const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
+//     if (!restaurant) {
+//       console.log('restaurant not found');
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Get the restaurant coordinates
+//     const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
+//     if (shippingOption === 'dine-in' && req.body.tableNumber) {
+//       // Check if the table number is already reserved
+      // const existingOrder = await Order.findOne({
+      //   resName: resName,
+      //   tableNumber: req.body.tableNumber,
+      //   status: { $nin: ['Completed', 'Not Approved','Delivered'] } 
+      // });
+
+      // if (existingOrder) {
+      //   return res.status(400).json({ error: "Table number is already reserved." });
+      // }
+//     }
+//     // Determine the order location based on the shipping option
+//     if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
+//       orderLocation = {
+//         type: 'Point',
+//         coordinates: restaurantCoordinates
+//       };
+//     }    
+//     else if (shippingOption === 'delivery') {
+//       if (!userLocation) {
+//         return res.status(400).json({ error: "User location is required for delivery option" });
+//       }
+//       try {
+//         const address = `${userLocation.lat},${userLocation.lng}`;
+//         const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
+//         const { results } = geocodingResponse.data;
+//         if (!results || results.length === 0) {
+//           throw new Error('Geocoding failed or no results found');
+//         }
+//         const location = results[0].geometry.location;
+//         orderLocation = {
+//           type: 'Point',
+//           coordinates: [location.lng, location.lat]
+//         };
+//       } catch (error) {
+//         console.error('Geocoding error:', error);
+//         return res.status(500).json({ error: "Failed to get user location" });
+//       }
+//     } else {
+//       return res.status(400).json({ error: "Invalid shipping option" });
+//     }
+
+//     const orderId = generateRandomOrderId(); // Assuming generateRandomOrderId is defined elsewhere
+//     const orderDataToSave = {
+//       orderId: orderId,
+//       customerId: customerId,
+//       products: products,
+//       status: status,
+//       shippingInfo: shippingInfo,
+//       shippingOption: shippingOption,
+//       orderLocation: orderLocation,
+//       createdAt: new Date(),
+//       orderTime: new Date()
+//     };
+
+//     if (shippingOption === 'dine-in' && req.body.tableNumber) {
+//       orderDataToSave.tableNumber = req.body.tableNumber;
+//     }
+//     const order = new Order(orderDataToSave);
+
+//     await order.save();
+
+//     await Cart.deleteOne({ customerId: customerId });
+
+//     // Broadcast 'newOrderReceived' message to all clients (including the restaurant owner)
+//     broadcastNewOrderReceived(resName);
+//     broadcastCartUpdated();
+
+//     return res.status(201).json({ status: "ok", message: "Order created successfully", order });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+
+// app.post("/create-order/:customerId", async (req, res) => {
+//   const { customerId } = req.params;
+
+//   try {
+//     let { products, shippingInfo, shippingOption, userLocation } = req.body;
+
+//     // Check if products is an object with an 'undefined' key
+//     if (products && typeof products === 'object' && products.hasOwnProperty('undefined')) {
+//       console.log('Products object received:', products);
+//       products = products.undefined; // Reassign products to the array under 'undefined' key
+//     }
+
+//     console.log('Products: ', products);
+
+//     // Ensure products is an array
+//     if (!Array.isArray(products) || products.length === 0) {
+//       return res.status(400).json({ error: "Products array is empty or not provided" });
+//     }
+
+//     const uniqueRestaurants = new Set();
+//     products.forEach((product, index) => {
+//       console.log(`Product ${index}:`, product);
+//       if (product.products && product.products.length > 0) {
+//         product.products.forEach(p => {
+//           if (p.orderFrom) {
+//             uniqueRestaurants.add(p.orderFrom);
+//           }
+//         });
+//       } else {
+//         console.warn('Product missing products field:', product);
+//       }
+//     });
+//     console.log('Unique Restaurants:', uniqueRestaurants);
+
+//     if (uniqueRestaurants.size === 0) {
+//       return res.status(400).json({ error: "No valid restaurants found in products" });
+//     }
+
+//     const ordersToSave = [];
+//     for (const resName of uniqueRestaurants) {
+//       const orderProducts = products
+//         .filter(product => product.products && product.products.some(p => p.orderFrom === resName))
+//         .flatMap(product => product.products.filter(p => p.orderFrom === resName));
+
+//       const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
+//       if (!restaurant) {
+//         console.log('Restaurant not found for:', resName);
+//         continue;
+//       }
+
+//       const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
+
+//       let orderLocation;
+//       if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
+//         orderLocation = {
+//           type: 'Point',
+//           coordinates: restaurantCoordinates
+//         };
+//       } else if (shippingOption === 'delivery') {
+//         if (!userLocation) {
+//           return res.status(400).json({ error: "User location is required for delivery option" });
+//         }
+//         try {
+//           const address = `${userLocation.lat},${userLocation.lng}`;
+//           const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
+//           const { results } = geocodingResponse.data;
+//           if (!results || results.length === 0) {
+//             throw new Error('Geocoding failed or no results found');
+//           }
+//           const location = results[0].geometry.location;
+//           orderLocation = {
+//             type: 'Point',
+//             coordinates: [location.lng, location.lat]
+//           };
+//         } catch (error) {
+//           console.error('Geocoding error:', error);
+//           return res.status(500).json({ error: "Failed to get user location" });
+//         }
+//       } else {
+//         return res.status(400).json({ error: "Invalid shipping option" });
+//       }
+
+//       const orderId = generateRandomOrderId(); // Ensure this function is defined
+//       const orderDataToSave = {
+//         orderId: orderId,
+//         customerId: customerId,
+//         products: orderProducts,
+//         status: '', // Set an appropriate status
+//         shippingInfo: shippingInfo,
+//         shippingOption: shippingOption,
+//         orderLocation: orderLocation,
+//         createdAt: new Date(),
+//         orderTime: new Date()
+//       };
+
+//       if (shippingOption === 'dine-in' && req.body.tableNumber) {
+//         orderDataToSave.tableNumber = req.body.tableNumber;
+//       }
+
+//       const order = new Order(orderDataToSave);
+//       ordersToSave.push(order);
+//     }
+
+//     await Order.insertMany(ordersToSave);
+//     await Cart.deleteMany({ customerId: customerId });
+
+//     uniqueRestaurants.forEach(resName => {
+//       broadcastNewOrderReceived(resName);
+//     });
+//     broadcastCartUpdated();
+
+//     return res.status(201).json({ status: "ok", message: "Order(s) created successfully", orders: ordersToSave });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
 app.post("/create-order/:customerId", async (req, res) => {
   const { customerId } = req.params;
 
   try {
-    const { products, shippingInfo, shippingOption, resName, userLocation } = req.body;
-    let orderLocation;
-const status = '';
-    // Fetch the restaurant details from the database
-    const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
-console.log('resname received in create order', resName);
-    if (!restaurant) {
-      console.log('restaurant not found');
-      return res.status(404).json({ error: "Restaurant not found" });
+    let { products, shippingInfo, shippingOption, userLocation, tableNumber } = req.body;
+
+    if (products && typeof products === 'object' && products.hasOwnProperty('undefined')) {
+      products = products.undefined;
     }
 
-    // Get the restaurant coordinates
-    const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
-    if (shippingOption === 'dine-in' && req.body.tableNumber) {
-      // Check if the table number is already reserved
-      const existingOrder = await Order.findOne({
-        resName: resName,
-        tableNumber: req.body.tableNumber,
-        status: { $nin: ['Completed', 'Not Approved','Delivered'] } 
-      });
-
-      if (existingOrder) {
-        return res.status(400).json({ error: "Table number is already reserved." });
-      }
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: "Products array is empty or not provided" });
     }
-    // Determine the order location based on the shipping option
-    if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
-      orderLocation = {
-        type: 'Point',
-        coordinates: restaurantCoordinates
-      };
-    }    
-    else if (shippingOption === 'delivery') {
-      if (!userLocation) {
-        return res.status(400).json({ error: "User location is required for delivery option" });
+
+    const uniqueRestaurants = new Set();
+    products.forEach((product) => {
+      if (product.products && product.products.length > 0) {
+        product.products.forEach(p => {
+          if (p.orderFrom) {
+            uniqueRestaurants.add(p.orderFrom);
+          }
+        });
       }
-      try {
-        const address = `${userLocation.lat},${userLocation.lng}`;
-        const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
-        const { results } = geocodingResponse.data;
-        if (!results || results.length === 0) {
-          throw new Error('Geocoding failed or no results found');
+    });
+
+    if (uniqueRestaurants.size === 0) {
+      return res.status(400).json({ error: "No valid restaurants found in products" });
+    }
+
+    const ordersToSave = [];
+    const productIdsToRemove = [];
+    const errors = [];
+    const successfulRestaurants = new Set(); // Track restaurants for which orders were successfully created
+
+    for (const resName of uniqueRestaurants) {
+      const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
+    
+      if (!restaurant) {
+        errors.push({ error: "Restaurant not found", resName: resName });
+        continue;
+      }
+    
+      if (restaurant.status !== 'open') {
+        errors.push({ error: `Restaurant is ${restaurant.status}`, resName: resName });
+        continue;
+      }
+    
+      if (shippingOption === 'dine-in') {
+        const existingOrder = await Order.findOne({
+          'products.orderFrom': resName, // Check if any product is ordered from this restaurant
+          tableNumber: tableNumber,
+          status: { $nin: ['Completed', 'Not Approved', 'Delivered'] }
+        });
+    
+        if (existingOrder) {
+          errors.push({ error: "Table number is already reserved", resName: resName });
+          continue;
         }
-        const location = results[0].geometry.location;
+      }    
+
+      const orderProducts = products
+        .filter(product => product.products && product.products.some(p => p.orderFrom === resName))
+        .flatMap(product => product.products.filter(p => p.orderFrom === resName));
+
+      const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
+      let orderLocation;
+
+      if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
         orderLocation = {
           type: 'Point',
-          coordinates: [location.lng, location.lat]
+          coordinates: restaurantCoordinates
         };
-      } catch (error) {
-        console.error('Geocoding error:', error);
-        return res.status(500).json({ error: "Failed to get user location" });
+      } else if (shippingOption === 'delivery') {
+        if (!userLocation) {
+          return res.status(400).json({ error: "User location is required for delivery option" });
+        }
+
+        try {
+          const address = `${userLocation.lat},${userLocation.lng}`;
+          const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
+          const { results } = geocodingResponse.data;
+          if (!results || results.length === 0) {
+            throw new Error('Geocoding failed or no results found');
+          }
+          const location = results[0].geometry.location;
+          orderLocation = {
+            type: 'Point',
+            coordinates: [location.lng, location.lat]
+          };
+        } catch (error) {
+          console.error('Geocoding error:', error);
+          return res.status(500).json({ error: "Failed to get user location" });
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid shipping option" });
       }
-    } else {
-      return res.status(400).json({ error: "Invalid shipping option" });
+
+      const orderId = generateRandomOrderId();
+      const orderDataToSave = {
+        orderId: orderId,
+        customerId: customerId,
+        products: orderProducts,
+        status: '',
+        shippingInfo: shippingInfo,
+        shippingOption: shippingOption,
+        orderLocation: orderLocation,
+        createdAt: new Date(),
+        orderTime: new Date()
+      };
+
+      if (shippingOption === 'dine-in' && tableNumber) {
+        orderDataToSave.tableNumber = tableNumber;
+      }
+
+      const order = new Order(orderDataToSave);
+      ordersToSave.push(order);
+      productIdsToRemove.push(...orderProducts.map(p => p._id));
+
+      // Add the restaurant name to the successfulRestaurants set
+      successfulRestaurants.add(resName);
     }
 
-    const orderId = generateRandomOrderId(); // Assuming generateRandomOrderId is defined elsewhere
-    const orderDataToSave = {
-      orderId: orderId,
-      resName: resName,
-      customerId: customerId,
-      products: products,
-      status: status,
-      shippingInfo: shippingInfo,
-      shippingOption: shippingOption,
-      orderLocation: orderLocation,
-      createdAt: new Date(),
-      orderTime: new Date()
-    };
-
-    if (shippingOption === 'dine-in' && req.body.tableNumber) {
-      orderDataToSave.tableNumber = req.body.tableNumber;
+    if (ordersToSave.length === 0) {
+      return res.status(400).json({ error: "No orders could be created", details: errors });
     }
-    const order = new Order(orderDataToSave);
 
-    await order.save();
+    await Order.insertMany(ordersToSave);
 
-    await Cart.deleteOne({ customerId: customerId });
+    const carts = await Cart.find({ customerId: customerId });
+    for (const cart of carts) {
+      cart.products = cart.products.filter(product => !productIdsToRemove.includes(product._id.toString()));
 
-    // Broadcast 'newOrderReceived' message to all clients (including the restaurant owner)
-    broadcastNewOrderReceived(resName);
+      if (cart.products.length === 0) {
+        await Cart.deleteOne({ _id: cart._id });
+      } else {
+        await cart.save();
+      }
+    }
+
+    // Broadcast only for the restaurants that had orders created
+    successfulRestaurants.forEach(resName => {
+      broadcastNewOrderReceived(resName);
+    });
+
     broadcastCartUpdated();
 
-    return res.status(201).json({ status: "ok", message: "Order created successfully", order });
+    return res.status(201).json({ status: "ok", message: "Order(s) created successfully", orders: ordersToSave });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+
+
+
+
+
 
 
 function generateRandomOrderId() {
