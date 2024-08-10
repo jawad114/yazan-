@@ -27,6 +27,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
+
  
 
 app.use(cors(corsOptions))
@@ -232,33 +233,271 @@ require("./ownerDetails");
 const Ownerr = mongoose.model("OwnerInfo");
 
 
+// app.post("/login-owner", async (req, res) => {
+//   const { email, password } = req.body;
+//   try {
+//     const owner = await Ownerr.findOne({ email });
+//     if (!owner) {
+//       return res.json({ error: "User not found" });
+//     }
+
+//     const isPasswordValid = await bcrypt.compare(password, owner.password);
+//     if (!isPasswordValid) {
+//       return res.json({ error: "Invalid password" });
+//     }
+
+//     // Find the restaurant with the restaurant name of the owner
+//     const restaurant = await Restaurant.findOne({ restaurantName: owner.firstname });
+//     if (!restaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     const token = generateToken(owner._id);
+
+//     return res.json({ status: "ok", id: owner._id, token, resName: owner.firstname, restaurantId: restaurant._id, name: owner.firstname + " " + owner.lastname });
+//   } catch (e) {
+//     return res.json({ status: e.message });
+//   }
+// });
+
+
+const SliderImageSchema = new mongoose.Schema({
+  title: {
+      type: String,
+      required: false
+  },
+  imageUrl: {
+      type: String,
+      required: true
+  }
+});
+
+const SliderImage = mongoose.model('SliderImage', SliderImageSchema);
+
+
+app.post('/addImage' , upload.single('carouselImage'), async (req, res) => {
+  try {
+      const { title } = req.body;
+      const carouselImage = req.file;
+    let imageUrl = null;
+    if (carouselImage) {
+      const result = await cloudinaryService.addImage(carouselImage.buffer);
+      imageUrl = result.secure_url;
+    }
+
+      const newSliderImage = new SliderImage({
+          title,
+          imageUrl
+      });
+
+      await newSliderImage.save();
+      res.status(201).json(newSliderImage);
+  } catch (error) {
+      res.status(400).json({ message: 'Error creating slider image', error });
+  }
+});
+
+// Get all slider images
+app.get('/allImages', async (req, res) => {
+  try {
+      const sliderImages = await SliderImage.find();
+      res.status(200).json(sliderImages);
+  } catch (error) {
+      res.status(500).json({ message: 'Error fetching slider images', error });
+  }
+});
+
+app.put('/image/:id', upload.single('carouselImage'), async (req, res) => {
+  try {
+    const { title } = req.body;
+    const carouselImage = req.file;
+    
+    let carousel = await SliderImage.findById(req.params.id);
+    if (!carousel) {
+      return res.status(404).json({ message: 'Slider image not found' });
+    }
+
+    let imageUrl = carousel.imageUrl;  // Initialize imageUrl with existing URL
+
+    if (carouselImage) {
+      try {
+        // Extract the public ID from the existing image URL
+        const existingImageUrl = carousel.imageUrl;
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = existingImageUrl.match(regex);
+        let publicId = null;
+
+        if (match) {
+          publicId = match[1]; // Extract the public ID
+        }
+
+        if (publicId) {
+          // Update the image on Cloudinary
+          const updatedImage = await cloudinaryService.updateImage(publicId, carouselImage.buffer);
+          imageUrl = updatedImage.secure_url;
+        } else {
+          // Upload a new image to Cloudinary
+          const result = await cloudinaryService.addImage(carouselImage.buffer);
+          imageUrl = result.secure_url;
+        }
+      } catch (error) {
+        console.error('Error updating image:', error);
+        return res.status(500).json({ error: "Error updating image" });
+      }
+    }
+
+    // Update only the provided fields
+    const updateData = {};
+    if (title) updateData.title = title;
+    if (imageUrl) updateData.imageUrl = imageUrl;
+
+    const updatedSliderImage = await SliderImage.findByIdAndUpdate(
+      req.params.id,
+      updateData,  // Update with conditional fields
+      { new: true }
+    );
+
+    res.status(200).json(updatedSliderImage);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating slider image', error });
+  }
+});
+
+// Delete a slider image by ID
+app.delete('/image/:id', async (req, res) => {
+  try {
+    // Find the slider image to delete
+    const sliderToRemove = await SliderImage.findById(req.params.id);
+    if (!sliderToRemove) {
+      return res.status(404).json({ message: 'Slider image not found' });
+    }
+
+    // Check if there is an image URL to delete
+    if (sliderToRemove.imageUrl) {
+      try {
+        // Extract the public ID from the image URL
+        const imageUrl = sliderToRemove.imageUrl;
+        console.log('Extracting public ID from image URL:', imageUrl);
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = imageUrl.match(regex);
+
+        if (match) {
+          const publicId = match[1]; // Extract the public ID
+          console.log('Public ID:', publicId);
+
+          // Call the deleteImage function
+          await cloudinaryService.deleteImage(publicId);
+        } else {
+          console.log('No public ID found in the image URL');
+        }
+      } catch (error) {
+        console.error('Error extracting public ID or deleting image:', error);
+        // Proceed to delete the database record even if the image deletion fails
+      }
+    }
+
+    // Delete the record from the database
+    const deletedSliderImage = await SliderImage.findByIdAndDelete(req.params.id);
+    if (!deletedSliderImage) {
+      return res.status(404).json({ message: 'Slider image not found' });
+    }
+
+    res.status(200).json({ message: 'Slider image deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting slider image', error });
+  }
+});
+
+
+app.get('/image/:id' ,async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    // Find the image by ID
+    const image = await SliderImage.findById(id);
+    
+    if (!image) {
+      return res.status(404).json({ message: 'Image not found' });
+    }
+
+    // Return the image details
+    res.json(image);
+  } catch (error) {
+    console.error('Error fetching image details:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
 app.post("/login-owner", async (req, res) => {
   const { email, password } = req.body;
   try {
+    // Find the owner by email
     const owner = await Ownerr.findOne({ email });
     if (!owner) {
-      return res.json({ error: "User not found" });
+      return res.status(404).json({ error: "Owner not found" });
     }
 
+    // Check if the email has been changed
+    if (!owner.emailChanged) {
+      return res.status(400).json({ error: "Please set your personal email first." });
+    }
+
+    // Validate the password
     const isPasswordValid = await bcrypt.compare(password, owner.password);
     if (!isPasswordValid) {
-      return res.json({ error: "Invalid password" });
+      return res.status(400).json({ error: "Invalid password" });
     }
 
-    // Find the restaurant with the restaurant name of the owner
+    // Find the restaurant associated with the owner
     const restaurant = await Restaurant.findOne({ restaurantName: owner.firstname });
     if (!restaurant) {
       return res.status(404).json({ error: "Restaurant not found" });
     }
 
+    // Generate a token for the owner
     const token = generateToken(owner._id);
 
-    return res.json({ status: "ok", id: owner._id, token, resName: owner.firstname, restaurantId: restaurant._id, name: owner.firstname + " " + owner.lastname });
+    // Return the response with owner and restaurant details
+    return res.json({
+      status: "ok",
+      id: owner._id,
+      token,
+      resName: owner.firstname,
+      restaurantId: restaurant._id,
+      name: `${owner.firstname}`
+    });
   } catch (e) {
     return res.json({ status: e.message });
   }
 });
 
+
+app.post("/update-owner-email", async (req, res) => {
+  const { email } = req.body;
+  
+  try {
+    const owner = await Ownerr.findOne({ email });
+    if (!owner) {
+      return res.status(404).json({ error: "Owner not found" });
+    }
+
+    // Assuming that the new email is also sent in req.body under `newEmail`
+    const { newEmail } = req.body;
+
+    if (!newEmail || newEmail === email) {
+      return res.status(400).json({ error: "Invalid new email" });
+    }
+
+    owner.email = newEmail;
+    owner.emailChanged = true;
+    await owner.save();
+
+    return res.json({ status: "ok", message: "Email updated successfully" });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
 
 
 // Get owner by ID
@@ -559,6 +798,7 @@ const addRestaurantOwner = async (req, res, next) => {
       firstname: restaurantName,
       lastname: "Owner",
       email,
+      emailChanged:false,
       password: encryptedPassword,
     });
 
@@ -3452,6 +3692,54 @@ app.post('/forgot-password', async (req, res) => {
 });
 
 
+app.post('/forgot-password-owner', async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await Ownerr.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'Owner not found' });
+    }
+
+    // Generate a random verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.verificationCode = verificationCode;
+    await user.save();
+
+    // Create a transporter using Gmail SMTP
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      auth: {
+        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
+        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+      }
+    });
+
+    // Configure email options
+    const mailOptions = {
+      from: 'YazanRestaurant@gmail.com',
+      to: email,
+      subject: 'Password Reset Verification Code',
+      text: `Hey ${user.firstname}, here's your requested Layla password reset code: ${verificationCode}. Please do not share this code with anyone, use this code to continue with setting your new password. It will expire in 30 minutes for security purposes. If you didn't request this, please disregard this message and notify our support team immediately. Best regards, Layla Security Team`
+    };
+
+    // Send email
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Failed to send verification code' });
+      } else {
+        res.json({ message: 'Verification code sent successfully' });
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+
 
 // API to reset password using verification code
 app.post('/reset-password', async (req, res) => {
@@ -3498,6 +3786,66 @@ app.post('/reset-password', async (req, res) => {
       to: email,
       subject: 'Password Changed Successfully',
       text: 'Your Layla account password has been successfully changed. If you did not initiate this change, please contact support immediately.'
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Failed to send password change notification' });
+      } else {
+        res.json({ message: 'Password reset successfully. Notification sent to your email.' });
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+
+app.post('/reset-password-owner', async (req, res) => {
+  const { email, verificationCode, newPassword } = req.body;
+  try {
+    const user = await Ownerr.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'Owner not found' });
+    }
+
+    // Check if the verification code matches
+    if (user.verificationCode !== verificationCode) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    const encryptedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the password
+    user.password = encryptedPassword;
+    // Clear the verification code
+    user.verificationCode = null;
+    await user.save();
+
+    // Send email notification
+    const transporter = nodemailer.createTransport({
+    //   host: 'layla-res.com',
+    // port: 465,
+    // secure: true, // Use true for 465, false for other ports
+    // auth: {
+    //     user: 'help@layla-res.com',
+    //     pass: 'Laylar@010'
+    // }
+    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    auth: {
+      user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
+      pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+    }
+    });
+
+    const mailOptions = {
+      from: 'YazanRestaurant@gmail.com',
+      to: email,
+      subject: 'Password Changed Successfully',
+      text: `Hey ${user.firstname}, your Layla account password has been successfully changed. If you did not initiate this change, please contact support immediately.`
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
