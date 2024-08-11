@@ -23,11 +23,11 @@ const upload = multer({ storage });
 
 
 const corsOptions = {
-  origin: 'https://layla-restaurant.netlify.app',
+  origin: '*',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
- 
+// https://layla-restaurant.netlify.app
  
 
 app.use(cors(corsOptions))
@@ -2159,6 +2159,27 @@ app.get("/get-restaurants", async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "An error occurred while getting restaurants" });
+  }
+});
+
+app.get('/search', async (req, res) => {
+  try {
+    const searchTerm = req.query.q || 'pizza'; // Default search term is "pizza"
+    
+    // Query to search for restaurants
+    const restaurants = await Restaurant.find({
+      $or: [
+        { 'menu.categoryName': new RegExp(searchTerm, 'i') },
+        { 'menu.dishes.name': new RegExp(searchTerm, 'i') },
+        { 'menu.dishes.description': new RegExp(searchTerm, 'i') },
+        {'restaurantName':new RegExp(searchTerm, 'i')}
+      ]
+    });
+
+    res.status(200).json(restaurants);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
