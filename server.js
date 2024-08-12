@@ -4,7 +4,7 @@ require("dotenv").config();
 const cors = require("cors");
 const app = express();
 const { ObjectId } = require('mongodb');
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 8181;
 const cloudinaryService = require('./services/CloudinaryServices'); // Adjust the path as necessary
 const bodyParser = require('body-parser');
 const bcrypt = require("bcryptjs");
