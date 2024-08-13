@@ -27,8 +27,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
-// https://layla-restaurant.netlify.app
- 
+// https://layla-marketplace.netlify.app
 
 app.use(cors(corsOptions))
 
@@ -1107,7 +1106,6 @@ const RestaurantsSchema = new mongoose.Schema({
       close: { type: String, default: "00:00" }
     }
   },
-  // Status of the restaurant (open, close, busy, etc.)
   status: { type: String, enum: ['open', 'closed', 'busy'], default: 'open' }
 }, {
   collection: "restaurantInfo"
@@ -1131,63 +1129,136 @@ const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 console.log('Server timezone: ' + serverTimezone);
 
+// cron.schedule('*/3 * * * *', async () => {
+//   try {
+//     // Get the current time in the server's timezone
+//     const currentTime = moment().tz(serverTimezone);
+
+//     // Get the current day and time (hour and minute)
+//     const currentDay = currentTime.format("dddd").toLowerCase();
+//     const currentHour = currentTime.hour();
+//     const currentMinute = currentTime.minute();
+
+//     console.log('Current Time', currentTime.format('HH:mm'));
+//     console.log('Current Hour', currentHour);
+//     console.log('Current Minute', currentMinute);
+//     console.log('Current Day', currentDay);
+
+//     // Find all restaurants
+//     const restaurants = await Restaurant.find();
+
+//     // Loop through each restaurant
+//     for (const restaurant of restaurants) {
+//       // Check if the restaurant has opening hours for the current day
+//       const openingHours = restaurant.openingHours[currentDay];
+
+//       if (openingHours) {
+//         // Extract the open and close hours
+//         const { open, close } = openingHours;
+
+//         // Convert opening and closing hours to numerical values for comparison
+//         const [openHour, openMinute] = open.split(":").map(Number);
+//         const [closeHour, closeMinute] = close.split(":").map(Number);
+
+
+//         // Check if the restaurant is already marked as busy
+//         if (restaurant.status === 'busy') {
+//           console.log(`Restaurant ${restaurant.restaurantName} is already busy.`);
+//           continue; // Skip to the next restaurant
+//         }
+
+//         // Determine if the current time is within the opening hours
+//         const isOpen = 
+//           (currentHour > openHour || (currentHour === openHour && currentMinute >= openMinute)) &&
+//           (currentHour < closeHour || (currentHour === closeHour && currentMinute <= closeMinute));
+
+//         // Update the status based on the current time
+//         if (isOpen) {
+//           if (restaurant.status !== 'open') {
+//             restaurant.status = 'open';
+//             await restaurant.save();
+//             console.log(`Restaurant ${restaurant.restaurantName} is now open.`);
+//           }
+//         } else {
+//           if (restaurant.status !== 'closed') {
+//             restaurant.status = 'closed';
+//             await restaurant.save();
+//             console.log(`Restaurant ${restaurant.restaurantName} is now closed.`);
+//           }
+//         }
+//       }
+//     }
+//   } catch (error) {
+//     console.error('Error updating restaurant statuses:', error);
+//   }
+// });
+
+
 cron.schedule('*/3 * * * *', async () => {
   try {
-    // Get the current time in the server's timezone
     const currentTime = moment().tz(serverTimezone);
-
-    // Get the current day and time (hour and minute)
     const currentDay = currentTime.format("dddd").toLowerCase();
     const currentHour = currentTime.hour();
     const currentMinute = currentTime.minute();
 
-    console.log('Current Time', currentTime.format('HH:mm'));
-    console.log('Current Hour', currentHour);
-    console.log('Current Minute', currentMinute);
-    console.log('Current Day', currentDay);
+    console.log('Current Time:', currentTime.format('HH:mm'));
+    console.log('Current Hour:', currentHour);
+    console.log('Current Minute:', currentMinute);
+    console.log('Current Day:', currentDay);
 
-    // Find all restaurants
     const restaurants = await Restaurant.find();
+    console.log('Number of restaurants found:', restaurants.length);
 
-    // Loop through each restaurant
     for (const restaurant of restaurants) {
-      // Check if the restaurant has opening hours for the current day
+      console.log(`Checking restaurant: ${restaurant.restaurantName}`);
+
       const openingHours = restaurant.openingHours[currentDay];
+      console.log('Opening hours for today:', openingHours);
 
       if (openingHours) {
-        // Extract the open and close hours
         const { open, close } = openingHours;
 
-        // Convert opening and closing hours to numerical values for comparison
-        const [openHour, openMinute] = open.split(":").map(Number);
-        const [closeHour, closeMinute] = close.split(":").map(Number);
+        const openTime = moment(open, "HH:mm");
+        const closeTime = moment(close, "HH:mm");
 
+        console.log('Open time:', openTime.format('HH:mm'));
+        console.log('Close time:', closeTime.format('HH:mm'));
 
-        // Check if the restaurant is already marked as busy
-        if (restaurant.status === 'busy') {
-          console.log(`Restaurant ${restaurant.restaurantName} is already busy.`);
-          continue; // Skip to the next restaurant
+        if (closeTime.isBefore(openTime)) {
+          closeTime.add(1, 'day');
+          console.log('Adjusted close time for post-midnight closing:', closeTime.format('HH:mm'));
         }
 
-        // Determine if the current time is within the opening hours
-        const isOpen = 
-          (currentHour > openHour || (currentHour === openHour && currentMinute >= openMinute)) &&
-          (currentHour < closeHour || (currentHour === closeHour && currentMinute <= closeMinute));
+        let adjustedCurrentTime = moment(currentTime.format("HH:mm"), "HH:mm");
+        console.log('Adjusted current time:', adjustedCurrentTime.format('HH:mm'));
 
-        // Update the status based on the current time
+        if (adjustedCurrentTime.isBefore(openTime)) {
+          adjustedCurrentTime.add(1, 'day');
+          console.log('Adjusted current time after adding a day:', adjustedCurrentTime.format('HH:mm'));
+        }
+
+        const isOpen = adjustedCurrentTime.isBetween(openTime, closeTime, null, '[)');
+        console.log(`Is the restaurant open? ${isOpen}`);
+
         if (isOpen) {
           if (restaurant.status !== 'open') {
             restaurant.status = 'open';
             await restaurant.save();
             console.log(`Restaurant ${restaurant.restaurantName} is now open.`);
+          } else {
+            console.log(`Restaurant ${restaurant.restaurantName} is already open.`);
           }
         } else {
           if (restaurant.status !== 'closed') {
             restaurant.status = 'closed';
             await restaurant.save();
             console.log(`Restaurant ${restaurant.restaurantName} is now closed.`);
+          } else {
+            console.log(`Restaurant ${restaurant.restaurantName} is already closed.`);
           }
         }
+      } else {
+        console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay}.`);
       }
     }
   } catch (error) {
@@ -1197,8 +1268,7 @@ cron.schedule('*/3 * * * *', async () => {
 
 
 
-
-// API endpoint to change restaurant status to "busy"
+// API endpoint to change restaurant status
 app.put("/change-restaurant-status/:restaurantName/:status", async (req, res) => {
   const { restaurantName, status } = req.params;
   const currentTime = moment().tz(serverTimezone);
@@ -1214,7 +1284,7 @@ app.put("/change-restaurant-status/:restaurantName/:status", async (req, res) =>
       return res.status(404).json({ error: "Restaurant not found" });
     }
 
-    // Change status to "busy"
+    // Change status 
     restaurant.status = status;
     await restaurant.save();
 
@@ -3046,8 +3116,10 @@ app.post("/create-order/:customerId", async (req, res) => {
 
         try {
           const address = `${userLocation.lat},${userLocation.lng}`;
-          const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
+          const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=AIzaSyAS3sYiLZxlLVObHv7zP2Rrdcz3T2Sc6Vs`);
           const { results } = geocodingResponse.data;
+          console.log('Geocoding results',geocodingResponse);
+          console.log('Geocoding data',geocodingResponse.data);
           if (!results || results.length === 0) {
             throw new Error('Geocoding failed or no results found');
           }
