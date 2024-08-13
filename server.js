@@ -23,7 +23,7 @@ const upload = multer({ storage });
 
 
 const corsOptions = {
-  origin: '*',
+  origin: 'https://layla-marketplace.netlify.app',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
@@ -278,6 +278,19 @@ const SliderImageSchema = new mongoose.Schema({
 
 const SliderImage = mongoose.model('SliderImage', SliderImageSchema);
 
+const FilterSchema = new mongoose.Schema({
+  title: {
+      type: String,
+      required: false
+  },
+  imageUrl: {
+      type: String,
+      required: true
+  }
+});
+
+const Filter = mongoose.model('Filter', FilterSchema);
+
 
 app.post('/addImage' , upload.single('carouselImage'), async (req, res) => {
   try {
@@ -430,6 +443,158 @@ app.get('/image/:id' ,async (req, res, next) => {
     res.json(image);
   } catch (error) {
     console.error('Error fetching image details:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/addFilter' , upload.single('filterImage'), async (req, res) => {
+  try {
+      const { title } = req.body;
+      const filterImage = req.file;
+    let imageUrl = null;
+    if (filterImage) {
+      const result = await cloudinaryService.addImage(filterImage.buffer);
+      imageUrl = result.secure_url;
+    }
+
+      const newFilter = new Filter({
+          title,
+          imageUrl
+      });
+
+      await newFilter.save();
+      res.status(201).json(newFilter);
+  } catch (error) {
+      res.status(400).json({ message: 'Error creating filter', error });
+  }
+});
+
+app.get('/allFilters', async (req, res) => {
+  try {
+      const filter = await Filter.find();
+      res.status(200).json(filter);
+  } catch (error) {
+      res.status(500).json({ message: 'Error fetching filter', error });
+  }
+});
+
+app.put('/filter/:id', upload.single('filterImage'), async (req, res) => {
+  try {
+    const { title } = req.body;
+    const filterImage = req.file;
+    
+    let filter = await Filter.findById(req.params.id);
+    if (!filter) {
+      return res.status(404).json({ message: 'Filter not found' });
+    }
+
+    let imageUrl = filter.imageUrl;  // Initialize imageUrl with existing URL
+
+    if (filterImage) {
+      try {
+        // Extract the public ID from the existing image URL
+        const existingImageUrl = filter.imageUrl;
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = existingImageUrl.match(regex);
+        let publicId = null;
+
+        if (match) {
+          publicId = match[1]; // Extract the public ID
+        }
+
+        if (publicId) {
+          // Update the image on Cloudinary
+          const updatedImage = await cloudinaryService.updateImage(publicId, filterImage.buffer);
+          imageUrl = updatedImage.secure_url;
+        } else {
+          // Upload a new image to Cloudinary
+          const result = await cloudinaryService.addImage(filterImage.buffer);
+          imageUrl = result.secure_url;
+        }
+      } catch (error) {
+        console.error('Error updating image:', error);
+        return res.status(500).json({ error: "Error updating image" });
+      }
+    }
+
+    // Update only the provided fields
+    const updateData = {};
+    if (title) updateData.title = title;
+    if (imageUrl) updateData.imageUrl = imageUrl;
+
+    const updatedFilter = await Filter.findByIdAndUpdate(
+      req.params.id,
+      updateData,  // Update with conditional fields
+      { new: true }
+    );
+
+    res.status(200).json(updatedFilter);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating filter', error });
+  }
+});
+
+// Delete a slider image by ID
+app.delete('/filter/:id', async (req, res) => {
+  try {
+    // Find the slider image to delete
+    const filterToRemove = await Filter.findById(req.params.id);
+    if (!filterToRemove) {
+      return res.status(404).json({ message: 'Filter not found' });
+    }
+
+    // Check if there is an image URL to delete
+    if (filterToRemove.imageUrl) {
+      try {
+        // Extract the public ID from the image URL
+        const imageUrl = filterToRemove.imageUrl;
+        console.log('Extracting public ID from image URL:', imageUrl);
+        const regex = /\/v\d+\/(.*?)\.(jpg|jpeg|png|webp)$/;
+        const match = imageUrl.match(regex);
+
+        if (match) {
+          const publicId = match[1]; // Extract the public ID
+          console.log('Public ID:', publicId);
+
+          // Call the deleteImage function
+          await cloudinaryService.deleteImage(publicId);
+        } else {
+          console.log('No public ID found in the image URL');
+        }
+      } catch (error) {
+        console.error('Error extracting public ID or deleting image:', error);
+        // Proceed to delete the database record even if the image deletion fails
+      }
+    }
+
+    // Delete the record from the database
+    const deletedFilter = await Filter.findByIdAndDelete(req.params.id);
+    if (!deletedFilter) {
+      return res.status(404).json({ message: 'Filter not found' });
+    }
+
+    res.status(200).json({ message: 'Filter deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting filter', error });
+  }
+});
+
+
+app.get('/filter/:id' ,async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    // Find the image by ID
+    const filter = await Filter.findById(id);
+    
+    if (!filter) {
+      return res.status(404).json({ message: 'Filter not found' });
+    }
+
+    // Return the image details
+    res.json(filter);
+  } catch (error) {
+    console.error('Error fetching filter:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
