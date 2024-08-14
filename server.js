@@ -27,7 +27,6 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
-// https://layla-marketplace.netlify.app
 
 app.use(cors(corsOptions))
 
@@ -1039,6 +1038,10 @@ const MenuCategorySchema = new mongoose.Schema({
     price: Number,
     dishImage: String,
     description: String,
+    visibility: {
+      type: Boolean,
+      default: true // Default value is true
+    },
     extras: {
       requiredExtras: {
         type: [{
@@ -1066,7 +1069,6 @@ const MenuCategorySchema = new mongoose.Schema({
 // Define Restaurant Schema
 const RestaurantsSchema = new mongoose.Schema({
   restaurantName: { type: String, required: true },
-
   picture: { type: String, required: true },
   location: { type: String },
   coordinates: {
@@ -1074,6 +1076,7 @@ const RestaurantsSchema = new mongoose.Schema({
     longitude: { type: Number, required: false }
   },
   menu: [MenuCategorySchema],
+  contact: { type: String},
   generatedEmail: { type: String},
   generatedPassword: { type: String},
   openingHours: {
@@ -1661,7 +1664,7 @@ app.delete("/remove-from-favorites/:customerId", async (req, res) => {
 
 app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (req, res) => {
   const { resName } = req.params;
-  const { newRestaurantName, newLocation } = req.body;
+  const { newRestaurantName, newLocation,newContact } = req.body;
   const restaurantImage = req.file ? req.file.buffer : null;
 
   try {
@@ -1675,8 +1678,6 @@ app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (
     if (newRestaurantName) {
       restaurant.restaurantName = newRestaurantName;
 
-      // Update the owner's firstname with the new restaurant name
-      const email = `${newRestaurantName.replace(/\s+/g, '')}@layla.com`;
 
       await Ownerr.findOneAndUpdate(
         { firstname: resName }, // Query to find the owner by the current restaurant name
@@ -1726,11 +1727,14 @@ app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (
     if (newLocation) {
       restaurant.location = newLocation;
     }
+    if (newContact) {
+      restaurant.contact = newContact;
+    }
 
     // Save the updated restaurant
     await restaurant.save();
 
-    return res.status(200).json({ status: "ok", message: "Restaurant updated successfully", resName: newRestaurantName || resName });
+    return res.status(200).json({ status: "ok", message: "Restaurant updated successfully", resName: newRestaurantName || resName, name: newRestaurantName || resName});
   } catch (error) {
     console.error("Error updating restaurant:", error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -2204,6 +2208,46 @@ app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refresh
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+
+app.put("/update-dish-visibility/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, async (req, res) => {
+  const { resName, categoryName, dishId } = req.params;
+  const { visibility } = req.body; // Only handle visibility
+
+  try {
+    // Find the restaurant by name
+    let restaurant = await Restaurant.findOne({ restaurantName: resName });
+    if (!restaurant) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    // Find the menu category by category name
+    let category = restaurant.menu.find((cat) => cat.categoryName === categoryName);
+    if (!category) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    // Find the dish in the category's dishes array by dish id
+    let dish = category.dishes.id(dishId);
+    if (!dish) {
+      return res.status(404).json({ error: "Dish not found" });
+    }
+
+    // Update the dish visibility
+    if (visibility !== undefined) { // Check if visibility is provided
+      dish.visibility = visibility; // Convert to boolean
+    }
+
+    // Save the updated restaurant
+    await restaurant.save();
+console.log('Dish Visibility',visibility);
+    return res.status(200).json({ status: "ok", message: "Dish visibility updated successfully", data: dish });
+  } catch (error) {
+    console.error("Error updating dish visibility:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 
 app.delete("/delete-dish/:resName/:categoryName/:dishId", async (req, res) => {
   const { resName, categoryName, dishId } = req.params;
@@ -2764,7 +2808,8 @@ const OrderSchema = new mongoose.Schema({
     name: String,
     email: String,
     phoneNumber1: String,
-    phoneNumber2: String
+    phoneNumber2: String,
+    note: String
   },
   orderLocation: { // Added orderLocation field
     type: {
@@ -3042,6 +3087,8 @@ app.post("/create-order/:customerId", async (req, res) => {
 
   try {
     let { products, shippingInfo, shippingOption, userLocation, tableNumber } = req.body;
+
+    console.log('Shipping info received at backend',shippingInfo);
 
     if (products && typeof products === 'object' && products.hasOwnProperty('undefined')) {
       products = products.undefined;
@@ -3333,7 +3380,7 @@ app.get("/restaurant-categories/:restaurantName", async (req, res) => {
     }
     
     const restaurantImage = restaurant.picture; // Assuming dishes are the products
-
+    const contact = restaurant.contact || '';
 
     const categories = restaurant.menu.map(category => ({
       categoryName: category.categoryName,
@@ -3344,10 +3391,10 @@ app.get("/restaurant-categories/:restaurantName", async (req, res) => {
     const category = restaurant.menu.find(category => category.categoryName === categories[0].categoryName);
     
     if (!category) {
-      return res.status(201).json({ status: "notfound", restaurantImage });
+      return res.status(201).json({ status: "notfound", restaurantImage, contact });
     }
 
-    return res.status(200).json({ status: "ok", categories,restaurantImage });
+    return res.status(200).json({ status: "ok", categories,restaurantImage, contact });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -3364,10 +3411,11 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
       return res.status(404).json({ error: "Restaurant not found" });
     }
     const restaurantImage = restaurant.picture;
+    const contact = restaurant.contact || ''; // Fetch contact info if available
     console.log('Restaurant Image',restaurantImage);
     const category = restaurant.menu.find(category => category.categoryName === categoryName);
     if (!category) {
-      return res.status(201).json({ restaurantImage });
+      return res.status(201).json({ restaurantImage,contact });
     }
 
     const products = category.dishes; // Assuming dishes are the products
@@ -3375,7 +3423,7 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
 
     console.log(category)
 
-    return res.status(200).json({ status: "ok", products,restaurantImage,categoryImage });
+    return res.status(200).json({ status: "ok", products,restaurantImage,categoryImage,contact });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
