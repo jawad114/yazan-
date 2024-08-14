@@ -1137,85 +1137,24 @@ const MenuCategory = mongoose.model("MenuCategory", MenuCategorySchema);
 
 // console.log('Server timezone: ' + serverTimezone);
 
-// cron.schedule('*/3 * * * *', async () => {
-//   try {
-//     const currentTime = moment().tz(serverTimezone);
-//     const currentDay = currentTime.format("dddd").toLowerCase();
-//     const currentHour = currentTime.hour();
-//     const currentMinute = currentTime.minute();
-
-//     console.log('Current Time:', currentTime.format('HH:mm'));
-//     console.log('Current Hour:', currentHour);
-//     console.log('Current Minute:', currentMinute);
-//     console.log('Current Day:', currentDay);
-
-//     const restaurants = await Restaurant.find();
-//     console.log('Number of restaurants found:', restaurants.length);
-
-//     for (const restaurant of restaurants) {
-//       console.log(`Checking restaurant: ${restaurant.restaurantName}`);
-
-//       const openingHours = restaurant.openingHours[currentDay];
-//       console.log('Opening hours for today:', openingHours);
-
-//       if (openingHours) {
-//         const { open, close } = openingHours;
-
-//         const openTime = moment(open, "HH:mm");
-//         const closeTime = moment(close, "HH:mm");
-
-//         console.log('Open time:', openTime.format('HH:mm'));
-//         console.log('Close time:', closeTime.format('HH:mm'));
-
-//         if (closeTime.isBefore(openTime)) {
-//           closeTime.add(1, 'day');
-//           console.log('Adjusted close time for post-midnight closing:', closeTime.format('HH:mm'));
-//         }
-
-//         let adjustedCurrentTime = moment(currentTime.format("HH:mm"), "HH:mm");
-//         console.log('Adjusted current time:', adjustedCurrentTime.format('HH:mm'));
-
-//         if (adjustedCurrentTime.isBefore(openTime)) {
-//           adjustedCurrentTime.add(1, 'day');
-//           console.log('Adjusted current time after adding a day:', adjustedCurrentTime.format('HH:mm'));
-//         }
-
-//         const isOpen = adjustedCurrentTime.isBetween(openTime, closeTime, null, '[)');
-//         console.log(`Is the restaurant open? ${isOpen}`);
-
-//         if (isOpen) {
-//           if (restaurant.status !== 'open') {
-//             restaurant.status = 'open';
-//             await restaurant.save();
-//             console.log(`Restaurant ${restaurant.restaurantName} is now open.`);
-//           } else {
-//             console.log(`Restaurant ${restaurant.restaurantName} is already open.`);
-//           }
-//         } else {
-//           if (restaurant.status !== 'closed') {
-//             restaurant.status = 'closed';
-//             await restaurant.save();
-//             console.log(`Restaurant ${restaurant.restaurantName} is now closed.`);
-//           } else {
-//             console.log(`Restaurant ${restaurant.restaurantName} is already closed.`);
-//           }
-//         }
-//       } else {
-//         console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay}.`);
-//       }
-//     }
-//   } catch (error) {
-//     console.error('Error updating restaurant statuses:', error);
-//   }
-// });
+// const timezones = ['Asia/Karachi', 'Asia/Jerusalem']; // List of timezones where the restaurant operates
 
 
+const timezone = 'Asia/Jerusalem';
+console.log('timezone: ' + timezone);
 
-const timezones = ['Asia/Karachi', 'Asia/Jerusalem']; // List of timezones where the restaurant operates
 
 cron.schedule('*/3 * * * *', async () => {
   try {
-    console.log('Cron job started');
+    const currentTime = moment().tz(timezone);
+    const currentDay = currentTime.format("dddd").toLowerCase();
+    const currentHour = currentTime.hour();
+    const currentMinute = currentTime.minute();
+
+    console.log('Current Time:', currentTime.format('HH:mm'));
+    console.log('Current Hour:', currentHour);
+    console.log('Current Minute:', currentMinute);
+    console.log('Current Day:', currentDay);
 
     const restaurants = await Restaurant.find();
     console.log('Number of restaurants found:', restaurants.length);
@@ -1223,64 +1162,132 @@ cron.schedule('*/3 * * * *', async () => {
     for (const restaurant of restaurants) {
       console.log(`Checking restaurant: ${restaurant.restaurantName}`);
 
-      let statusChanged = false;
+      const openingHours = restaurant.openingHours[currentDay];
+      console.log('Opening hours for today:', openingHours);
 
-      for (const timezone of timezones) {
-        const currentTime = moment().tz(timezone);
-        const currentDay = currentTime.format("dddd").toLowerCase();
+      if (openingHours) {
+        const { open, close } = openingHours;
 
-        console.log(`Current Time in ${timezone}: ${currentTime.format('HH:mm')}`);
-        const openingHours = restaurant.openingHours[currentDay];
+        const openTime = moment(open, "HH:mm");
+        const closeTime = moment(close, "HH:mm");
 
-        if (openingHours) {
-          const { open, close } = openingHours;
+        console.log('Open time:', openTime.format('HH:mm'));
+        console.log('Close time:', closeTime.format('HH:mm'));
 
-          const openTime = moment.tz(open, "HH:mm", timezone);
-          const closeTime = moment.tz(close, "HH:mm", timezone);
+        if (closeTime.isBefore(openTime)) {
+          closeTime.add(1, 'day');
+          console.log('Adjusted close time for post-midnight closing:', closeTime.format('HH:mm'));
+        }
 
-          console.log(`Open time in ${timezone}: ${openTime.format('HH:mm')}`);
-          console.log(`Close time in ${timezone}: ${closeTime.format('HH:mm')}`);
+        let adjustedCurrentTime = moment(currentTime.format("HH:mm"), "HH:mm");
+        console.log('Adjusted current time:', adjustedCurrentTime.format('HH:mm'));
 
-          if (closeTime.isBefore(openTime)) {
-            closeTime.add(1, 'day');
-            console.log(`Adjusted close time for post-midnight closing in ${timezone}: ${closeTime.format('HH:mm')}`);
-          }
+        if (adjustedCurrentTime.isBefore(openTime)) {
+          adjustedCurrentTime.add(1, 'day');
+          console.log('Adjusted current time after adding a day:', adjustedCurrentTime.format('HH:mm'));
+        }
 
-          // Directly use currentTime for comparison
-          const isOpen = currentTime.isBetween(openTime, closeTime, null, '[)');
-          console.log(`Is the restaurant open in ${timezone}? ${isOpen}`);
+        const isOpen = adjustedCurrentTime.isBetween(openTime, closeTime, null, '[)');
+        console.log(`Is the restaurant open? ${isOpen}`);
 
-          if (isOpen) {
-            if (restaurant.statusByTimezone[timezone]?.status !== 'open') {
-              restaurant.statusByTimezone[timezone] = { status: 'open' };
-              statusChanged = true;
-              console.log(`Restaurant ${restaurant.restaurantName} is now open in ${timezone}.`);
-            } else {
-              console.log(`Restaurant ${restaurant.restaurantName} is already open in ${timezone}.`);
-            }
+        if (isOpen) {
+          if (restaurant.status !== 'open') {
+            restaurant.status = 'open';
+            await restaurant.save();
+            console.log(`Restaurant ${restaurant.restaurantName} is now open.`);
           } else {
-            if (restaurant.statusByTimezone[timezone]?.status !== 'closed') {
-              restaurant.statusByTimezone[timezone] = { status: 'closed' };
-              statusChanged = true;
-              console.log(`Restaurant ${restaurant.restaurantName} is now closed in ${timezone}.`);
-            } else {
-              console.log(`Restaurant ${restaurant.restaurantName} is already closed in ${timezone}.`);
-            }
+            console.log(`Restaurant ${restaurant.restaurantName} is already open.`);
           }
         } else {
-          console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay} in ${timezone}.`);
+          if (restaurant.status !== 'closed') {
+            restaurant.status = 'closed';
+            await restaurant.save();
+            console.log(`Restaurant ${restaurant.restaurantName} is now closed.`);
+          } else {
+            console.log(`Restaurant ${restaurant.restaurantName} is already closed.`);
+          }
         }
-      }
-
-      // Save the restaurant status only if any status has changed
-      if (statusChanged) {
-        await restaurant.save();
+      } else {
+        console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay}.`);
       }
     }
   } catch (error) {
     console.error('Error updating restaurant statuses:', error);
   }
 });
+
+
+
+
+
+// cron.schedule('*/3 * * * *', async () => {
+//   try {
+//     console.log('Cron job started');
+
+//     const restaurants = await Restaurant.find();
+//     console.log('Number of restaurants found:', restaurants.length);
+
+//     for (const restaurant of restaurants) {
+//       console.log(`Checking restaurant: ${restaurant.restaurantName}`);
+
+//       let statusChanged = false;
+
+//       for (const timezone of timezones) {
+//         const currentTime = moment().tz(timezone);
+//         const currentDay = currentTime.format("dddd").toLowerCase();
+
+//         console.log(`Current Time in ${timezone}: ${currentTime.format('HH:mm')}`);
+//         const openingHours = restaurant.openingHours[currentDay];
+
+//         if (openingHours) {
+//           const { open, close } = openingHours;
+
+//           const openTime = moment.tz(open, "HH:mm", timezone);
+//           const closeTime = moment.tz(close, "HH:mm", timezone);
+
+//           console.log(`Open time in ${timezone}: ${openTime.format('HH:mm')}`);
+//           console.log(`Close time in ${timezone}: ${closeTime.format('HH:mm')}`);
+
+//           if (closeTime.isBefore(openTime)) {
+//             closeTime.add(1, 'day');
+//             console.log(`Adjusted close time for post-midnight closing in ${timezone}: ${closeTime.format('HH:mm')}`);
+//           }
+
+//           // Directly use currentTime for comparison
+//           const isOpen = currentTime.isBetween(openTime, closeTime, null, '[)');
+//           console.log(`Is the restaurant open in ${timezone}? ${isOpen}`);
+
+//           if (isOpen) {
+//             if (restaurant.statusByTimezone[timezone]?.status !== 'open') {
+//               restaurant.statusByTimezone[timezone] = { status: 'open' };
+//               statusChanged = true;
+//               console.log(`Restaurant ${restaurant.restaurantName} is now open in ${timezone}.`);
+//             } else {
+//               console.log(`Restaurant ${restaurant.restaurantName} is already open in ${timezone}.`);
+//             }
+//           } else {
+//             if (restaurant.statusByTimezone[timezone]?.status !== 'closed') {
+//               restaurant.statusByTimezone[timezone] = { status: 'closed' };
+//               statusChanged = true;
+//               console.log(`Restaurant ${restaurant.restaurantName} is now closed in ${timezone}.`);
+//             } else {
+//               console.log(`Restaurant ${restaurant.restaurantName} is already closed in ${timezone}.`);
+//             }
+//           }
+//         } else {
+//           console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay} in ${timezone}.`);
+//         }
+//       }
+
+//       // Save the restaurant status only if any status has changed
+//       if (statusChanged) {
+//         await restaurant.save();
+//       }
+//     }
+//   } catch (error) {
+//     console.error('Error updating restaurant statuses:', error);
+//   }
+// });
 
 
 
