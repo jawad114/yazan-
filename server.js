@@ -1294,7 +1294,7 @@ cron.schedule('*/3 * * * *', async () => {
 // API endpoint to change restaurant status
 app.put("/change-restaurant-status/:restaurantName/:status", async (req, res) => {
   const { restaurantName, status } = req.params;
-  const currentTime = moment().tz(serverTimezone);
+  const currentTime = moment().tz(timezone);
 
   let currentDay = currentTime.format("dddd");
   currentDay = currentDay.toLowerCase();
