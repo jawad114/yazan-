@@ -2829,7 +2829,8 @@ const OrderSchema = new mongoose.Schema({
     email: String,
     phoneNumber1: String,
     phoneNumber2: String,
-    note: String
+    note: String,
+    address:String,
   },
   orderLocation: { // Added orderLocation field
     type: {
@@ -2840,7 +2841,13 @@ const OrderSchema = new mongoose.Schema({
     coordinates: {
       type: [Number],
       required: true
-    }
+    },
+    formatted_address:{
+      type: String,
+    },
+    place_name:{
+      type: String,
+    },
   },
   preparingTime: Number,
   preparingStartedAt: Date,
@@ -3185,20 +3192,31 @@ app.post("/create-order/:customerId", async (req, res) => {
           const address = `${userLocation.lat},${userLocation.lng}`;
           const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=AIzaSyAS3sYiLZxlLVObHv7zP2Rrdcz3T2Sc6Vs`);
           const { results } = geocodingResponse.data;
-          console.log('Geocoding results',geocodingResponse);
-          console.log('Geocoding data',geocodingResponse.data);
+        
+          console.log('Geocoding results', geocodingResponse);
+          console.log('Geocoding data', geocodingResponse.data);
+        
           if (!results || results.length === 0) {
             throw new Error('Geocoding failed or no results found');
           }
+        
           const location = results[0].geometry.location;
+          const formattedAddress = results[0].formatted_address;
+          const placeName = results[0].address_components.find(component => component.types.includes('establishment'))?.long_name || 'Unknown place';
+        
           orderLocation = {
             type: 'Point',
-            coordinates: [location.lng, location.lat]
+            coordinates: [location.lng, location.lat],
+            formatted_address: formattedAddress,
+            place_name: placeName
           };
+        
+          console.log('Order location:', orderLocation);
+        
         } catch (error) {
           console.error('Geocoding error:', error);
           return res.status(500).json({ error: "Failed to get user location" });
-        }
+        }        
       } else {
         return res.status(400).json({ error: "Invalid shipping option" });
       }
@@ -3338,6 +3356,37 @@ app.get('/order/:customerId', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+app.get('/order/delivery/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    
+    // Find the latest delivery order for the given customer
+    const latestDeliveryOrder = await Order.findOne({
+      customerId,
+      shippingOption: 'delivery'
+    })
+    .sort({ createdAt: -1 }); // Sort by createdAt in descending order
+
+    // Check if a delivery order was found
+    if (!latestDeliveryOrder) {
+      return res.status(404).json({ error: 'No delivery orders found' });
+    }
+
+    // Add orderTime field to the order object
+    const orderWithTime = {
+      ...latestDeliveryOrder.toJSON(),
+      orderTime: latestDeliveryOrder.createdAt // Assuming createdAt is the timestamp of when the order was created
+    };
+
+    res.json({ order: orderWithTime });
+  } catch (error) {
+    console.error('Error fetching latest delivery order:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 
 
 // Endpoint to update an order status
