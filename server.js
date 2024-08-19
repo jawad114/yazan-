@@ -28,6 +28,7 @@ const corsOptions = {
 };
 
 
+
 app.use(cors(corsOptions))
 
 const server = http.createServer(app);
@@ -4023,7 +4024,7 @@ app.post('/api/orders/rejected', async (req, res) => {
     };
 
     if (restaurantName) {
-      query.resName = restaurantName;
+      query['products.orderFrom'] = new RegExp(`^${restaurantName}$`, 'i');
     }
 
     const rejectedOrders = await Order.find(query);
