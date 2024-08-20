@@ -28,7 +28,6 @@ const corsOptions = {
 };
 
 
-
 app.use(cors(corsOptions))
 
 const server = http.createServer(app);
@@ -1504,14 +1503,23 @@ app.get("/opening-hours/:restaurantName", async (req, res) => {
 
 
 const addRestaurant = async (req, res, next) => {
-  const { restaurantName, location } = req.body;
+  const { restaurantName, location,coordinates } = req.body;
 
   try {
     const existingRestaurant = await Restaurant.findOne({ restaurantName });
     if (existingRestaurant) {
       return res.status(400).json({ error: "Restaurant with the same name already exists" });
     }
-
+      const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(coordinates)}&key=AIzaSyAS3sYiLZxlLVObHv7zP2Rrdcz3T2Sc6Vs`);    
+      const { results } = geocodingResponse.data;
+    
+      if (!results || results.length === 0) {
+        throw new Error('Geocoding failed or no results found');
+      }
+    
+      const { lat, lng } = results[0].geometry.location;
+      console.log('Coordinates in lat lng from API:', lat, lng);
+    
     // Upload picture to Cloudinary
     let pictureUrl;
     if (req.file) {
@@ -1524,8 +1532,8 @@ const addRestaurant = async (req, res, next) => {
       picture: pictureUrl,
       location,
       coordinates: {
-        latitude: '78', // Replace with actual coordinates
-        longitude: '68' // Replace with actual coordinates
+        latitude: lat, // Replace with actual coordinates
+        longitude: lng // Replace with actual coordinates
       }
     });
 
@@ -1685,7 +1693,7 @@ app.delete("/remove-from-favorites/:customerId", async (req, res) => {
 
 app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (req, res) => {
   const { resName } = req.params;
-  const { newRestaurantName, newLocation,newContact } = req.body;
+  const { newRestaurantName, newLocation,newContact,updatedCoordinates } = req.body;
   const restaurantImage = req.file ? req.file.buffer : null;
 
   try {
@@ -1750,6 +1758,18 @@ app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (
     }
     if (newContact) {
       restaurant.contact = newContact;
+    }
+    if(updatedCoordinates){
+      const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(updatedCoordinates)}&key=AIzaSyAS3sYiLZxlLVObHv7zP2Rrdcz3T2Sc6Vs`);    
+      const { results } = geocodingResponse.data;
+    
+      if (!results || results.length === 0) {
+        throw new Error('Geocoding failed or no results found');
+      }
+    
+      const { lat, lng } = results[0].geometry.location;
+      console.log('Coordinates in lat lng from API:', lat, lng);
+      restaurant.coordinates = { latitude: lat, longitude: lng };
     }
 
     // Save the updated restaurant
@@ -2813,6 +2833,7 @@ const OrderSchema = new mongoose.Schema({
     productId: String,
     quantity: Number,
     orderFrom: String,
+    dishImage: String,
     price: Number,
     name: String,
     extras: {
