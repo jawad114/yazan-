@@ -23,10 +23,11 @@ const upload = multer({ storage });
 
 
 const corsOptions = {
-  origin: 'https://layla-marketplace.netlify.app',
+  origin: '*',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
+// https://layla-marketplace.netlify.app
 
 app.use(cors(corsOptions))
 
@@ -670,7 +671,7 @@ app.post("/update-owner-email", async (req, res) => {
 
 
 // Get owner by ID
-app.get("/owner/:id", authenticateUser, async (req, res) => {
+app.get("/owner/:id", async (req, res) => {
   const ownerId = req.params.id;
   try {
     const owner = await Ownerr.findById(ownerId);
@@ -728,8 +729,8 @@ app.post("/register-client", async (req, res) => {
       host: 'smtp.gmail.com',
       port: 587,
       auth: {
-        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+        user: process.env.Google_Email, // Your Gmail email address
+        pass: process.env.Google_Password // Your Gmail password or App Password
       }
     });
 
@@ -822,8 +823,8 @@ app.post("/resend-verification-code", async (req, res) => {
       host: 'smtp.gmail.com',
       port: 587,
       auth: {
-        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+        user: process.env.Google_Email, // Your Gmail email address
+        pass: process.env.Google_Password // Your Gmail password or App Password
       }
     });
 
@@ -2177,7 +2178,7 @@ app.delete("/delete-category/:restaurantName/:categoryName", async (req, res) =>
 // });
 
 
-app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, upload.single('dishImage'), async (req, res) => {
+app.put("/update-dish/:resName/:categoryName/:dishId", upload.single('dishImage'), async (req, res) => {
   const { resName, categoryName, dishId } = req.params;
   const { name, price, description } = req.body;
   const dishImage = req.file; // Access the uploaded file from req.file
@@ -2243,6 +2244,18 @@ app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refresh
     // Save the updated restaurant
     await restaurant.save();
 
+    
+    const updatedDish = await Dish.findByIdAndUpdate(dishId, {
+      name: name || dish.name,
+      price: price || dish.price,
+      description: description || dish.description,
+      dishImage: dish.dishImage // Ensure dishImage is updated in both places
+    }, { new: true }); // Return the updated document
+
+    if (!updatedDish) {
+      return res.status(404).json({ error: "Dish not found in Dish collection" });
+    }
+
     return res.status(200).json({ status: "ok", message: "Dish updated successfully", data: dish });
   } catch (error) {
     console.error("Error updating dish:", error);
@@ -2250,8 +2263,10 @@ app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refresh
   }
 });
 
+// , authenticateUser, refreshAuthToken
 
-app.put("/update-dish-visibility/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, async (req, res) => {
+
+app.put("/update-dish-visibility/:resName/:categoryName/:dishId", async (req, res) => {
   const { resName, categoryName, dishId } = req.params;
   const { visibility } = req.body; // Only handle visibility
 
@@ -2456,7 +2471,7 @@ app.delete("/delete-restaurant/:resName", async (req, res) => {
 
 
 
-app.get("/get-one-res/:resName", authenticateUser, async (req, res) => {
+app.get("/get-one-res/:resName", async (req, res) => {
   const { resName } = req.params;
   console.log("Received resName:", resName); // Log the received resName
   try {
@@ -2502,6 +2517,111 @@ app.get('/search', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// app.get("/search-categories/:restaurantName", async (req, res) => {
+//   const { restaurantName } = req.params;
+//   const { searchTerm } = req.query; // Get search term from query parameters
+
+//   try {
+//     // Find the restaurant by name
+//     const restaurant = await Restaurant.findOne({ restaurantName });
+//     if (!restaurant) {
+//       return res.status(404).json({ error: "Restaurant not found" });
+//     }
+
+//     // Construct search query
+//     let searchQuery = {};
+//     if (searchTerm) {
+//       const regex = new RegExp(searchTerm, 'i'); // Case-insensitive search
+//       searchQuery = {
+//         $or: [
+//           { 'menu.categoryName': regex },
+//           { 'menu.dishes.name': regex },
+//           { 'menu.dishes.description': regex }
+//         ]
+//       };
+//     }
+
+//     // Find categories matching the search term
+//     const categories = restaurant.menu.filter(category => {
+//       return category.categoryName.match(searchQuery.$or.find(query => query['menu.categoryName'])) ||
+//         category.dishes.some(dish =>
+//           dish.name.match(searchQuery.$or.find(query => query['menu.dishes.name'])) ||
+//           dish.description.match(searchQuery.$or.find(query => query['menu.dishes.description']))
+//         );
+//     }).map(category => ({
+//       categoryName: category.categoryName,
+//       categoryImage: category.categoryImage,
+//       dishes: category.dishes.filter(dish =>
+//         dish.name.match(searchQuery.$or.find(query => query['menu.dishes.name'])) ||
+//         dish.description.match(searchQuery.$or.find(query => query['menu.dishes.description']))
+//       )
+//     }));
+
+//     if (categories.length === 0) {
+//       return res.status(201).json({ status: "notfound", restaurantImage: restaurant.picture, contact: restaurant.contact });
+//     }
+
+//     return res.status(200).json({ status: "ok", categories, restaurantImage: restaurant.picture, contact: restaurant.contact });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+app.get("/search-categories/:restaurantName", async (req, res) => {
+  const { restaurantName } = req.params;
+  const searchTerm = req.query.q; // Get search term from query parameters
+
+  try {
+    // Find the restaurant by name
+    const restaurant = await Restaurant.findOne({ restaurantName });
+    if (!restaurant) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    let categories;
+
+    if (!searchTerm) {
+      // If searchTerm is empty, return all categories and dishes
+      categories = restaurant.menu.map(category => ({
+        categoryName: category.categoryName,
+        categoryImage: category.categoryImage,
+        dishes: category.dishes
+      }));
+    } else {
+      // If searchTerm is provided, filter categories and dishes
+      const regex = new RegExp(searchTerm, 'i'); // Case-insensitive search
+      categories = restaurant.menu.filter(category => {
+        return category.categoryName.match(regex) ||
+          category.dishes.some(dish =>
+            dish.name.match(regex) ||
+            dish.description.match(regex)
+          );
+      }).map(category => ({
+        categoryName: category.categoryName,
+        categoryImage: category.categoryImage,
+        dishes: category.dishes.filter(dish =>
+          dish.name.match(regex) ||
+          dish.description.match(regex)
+        )
+      }));
+    }
+
+    console.log('Categories: ', categories);
+
+    if (categories.length === 0) {
+      return res.status(201).json({ status: "notfound",categories, restaurantImage: restaurant.picture, contact: restaurant.contact });
+    }
+
+    return res.status(200).json({ status: "ok", categories, restaurantImage: restaurant.picture, contact: restaurant.contact });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
 
 // const CartSchema = new mongoose.Schema({
 //   customerId: {
@@ -2636,7 +2756,7 @@ console.log('Res Name',orderFrom);
     res.status(200).json({ status: "ok", message: "Product added to cart", id: cart.customerId, products: cart.products });
   } catch (error) {
     console.error("Error adding product to cart:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: "Internal Server Error",message:error.message});
   }
 });
 
@@ -4079,8 +4199,8 @@ app.post('/forgot-password', async (req, res) => {
       host: 'smtp.gmail.com',
       port: 587,
       auth: {
-        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+        user: process.env.Google_Email, // Your Gmail email address
+        pass: process.env.Google_Password // Your Gmail password or App Password
       }
     });
 
@@ -4127,8 +4247,8 @@ app.post('/forgot-password-owner', async (req, res) => {
       host: 'smtp.gmail.com',
       port: 587,
       auth: {
-        user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-        pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+        user: process.env.Google_Email, // Your Gmail email address
+        pass: process.env.Google_Password // Your Gmail password or App Password
       }
     });
 
@@ -4191,8 +4311,8 @@ app.post('/reset-password', async (req, res) => {
     host: 'smtp.gmail.com',
     port: 587,
     auth: {
-      user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-      pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+      user: process.env.Google_Email, // Your Gmail email address
+      pass: process.env.Google_Password // Your Gmail password or App Password
     }
     });
 
@@ -4251,8 +4371,8 @@ app.post('/reset-password-owner', async (req, res) => {
     host: 'smtp.gmail.com',
     port: 587,
     auth: {
-      user: 'help.layla.restaurant@gmail.com', // Your Gmail email address
-      pass: 'fjrmzlkpibbguedt' // Your Gmail password or App Password
+      user: process.env.Google_Email, // Your Gmail email address
+      pass: process.env.Google_Password // Your Gmail password or App Password
     }
     });
 
