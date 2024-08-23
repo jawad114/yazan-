@@ -1,5 +1,13 @@
+# Enable URL rewriting and proxy
 RewriteEngine On
 
-RewriteCond %{REQUEST_URI} !^(index\.php|index\.perl|index\.pl|index\.ppl|index\.cgi|index\.jsp|index\.jp|index\.phtml|index\.shtml|index\.xhtml|index\.html|home\.htm|default\.htm|Default\.html|welcome\.html|Default\.htm|index\.wml|index\.js|index\.htm)$
+# Check if the request is not for an existing file or directory
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
 
-RewriteRule ^(.*)$ http://localhost:5002/$1 [P,L]
+# Redirect all requests to localhost:5000
+RewriteRule ^(.*)$ http://localhost:5000/$1 [P,L]
+
+# Ensure proxy settings are enabled
+ProxyRequests Off
+ProxyPassReverse / http://localhost:5000/

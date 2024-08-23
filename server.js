@@ -725,12 +725,12 @@ app.post("/register-client", async (req, res) => {
 
     // Send verification code to the user's email
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: 'laylamp.com',
+      port: 465,
+      secure: true, // Use true for 465, false for other ports
       auth: {
-        user: process.env.Google_Email, // Your Gmail email address
-        pass: process.env.Google_Password // Your Gmail password or App Password
+        user: process.env.smtp_email, // Your Gmail email address
+        pass: process.env.smtp_password // Your Gmail password or App Password
       }
     });
 
@@ -819,12 +819,12 @@ app.post("/resend-verification-code", async (req, res) => {
 
     // Send the new verification code to the user's email
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: 'laylamp.com',
+      port: 465,
+      secure: true, // Use true for 465, false for other ports
       auth: {
-        user: process.env.Google_Email, // Your Gmail email address
-        pass: process.env.Google_Password // Your Gmail password or App Password
+        user: process.env.smtp_email, // Your Gmail email address
+        pass: process.env.smtp_password // Your Gmail password or App Password
       }
     });
 
@@ -4194,12 +4194,12 @@ app.post('/forgot-password', async (req, res) => {
 
     // Create a transporter using Gmail SMTP
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: 'laylamp.com',
+      port: 465,
+      secure: true, // Use true for 465, false for other ports
       auth: {
-        user: process.env.Google_Email, // Your Gmail email address
-        pass: process.env.Google_Password // Your Gmail password or App Password
+        user: process.env.smtp_email, // Your Gmail email address
+        pass: process.env.smtp_password // Your Gmail password or App Password
       }
     });
 
@@ -4242,12 +4242,12 @@ app.post('/forgot-password-owner', async (req, res) => {
 
     // Create a transporter using Gmail SMTP
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: 'laylamp.com',
+      port: 465,
+      secure: true, // Use true for 465, false for other ports
       auth: {
-        user: process.env.Google_Email, // Your Gmail email address
-        pass: process.env.Google_Password // Your Gmail password or App Password
+        user: process.env.smtp_email, // Your Gmail email address
+        pass: process.env.smtp_password // Your Gmail password or App Password
       }
     });
 
@@ -4299,19 +4299,12 @@ app.post('/reset-password', async (req, res) => {
 
     // Send email notification
     const transporter = nodemailer.createTransport({
-    //   host: 'layla-res.com',
-    // port: 465,
-    // secure: true, // Use true for 465, false for other ports
-    // auth: {
-    //     user: 'help@layla-res.com',
-    //     pass: 'Laylar@010'
-    // }
-    service: 'gmail',
-    host: 'smtp.gmail.com',
-    port: 587,
+      host: 'laylamp.com',
+      port: 465,
+      secure: true, // Use true for 465, false for other ports
     auth: {
-      user: process.env.Google_Email, // Your Gmail email address
-      pass: process.env.Google_Password // Your Gmail password or App Password
+      user: process.env.smtp_email, // Your Gmail email address
+      pass: process.env.smtp_password // Your Gmail password or App Password
     }
     });
 
@@ -4359,19 +4352,15 @@ app.post('/reset-password-owner', async (req, res) => {
 
     // Send email notification
     const transporter = nodemailer.createTransport({
-    //   host: 'layla-res.com',
-    // port: 465,
-    // secure: true, // Use true for 465, false for other ports
-    // auth: {
-    //     user: 'help@layla-res.com',
-    //     pass: 'Laylar@010'
-    // }
-    service: 'gmail',
-    host: 'smtp.gmail.com',
-    port: 587,
+      // service: 'gmail',
+      // host: 'smtp.gmail.com',
+      // port: 587,
+    host: 'laylamp.com',
+    port: 465,
+    secure: true, // Use true for 465, false for other ports
     auth: {
-      user: process.env.Google_Email, // Your Gmail email address
-      pass: process.env.Google_Password // Your Gmail password or App Password
+      user: process.env.smtp_email, // Your Gmail email address
+      pass: process.env.smtp_password // Your Gmail password or App Password
     }
     });
 
