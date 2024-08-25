@@ -736,7 +736,7 @@ app.post("/register-client", async (req, res) => {
 
     // Configure email options
     const mailOptions = {
-      from: 'YazanResturant@gmail.com',
+      from: process.env.smtp_email,
       to: email,
       subject: 'Account Verification',
       text: `Hello, Your verification code is: ${verificationCode}. Please use this code to complete your registration. It will expire in 30 minutes. If you didn't initiate this request, please ignore this message. Thank you, Layla Security Team.`
@@ -830,7 +830,7 @@ app.post("/resend-verification-code", async (req, res) => {
 
     // Configure email options
     const mailOptions = {
-      from: 'YazanResturant@gmail.com',
+      from: process.env.smtp_email,
       to: email,
       subject: 'New Verification Code',
       text: `Hello, Your new verification code is: ${verificationCode}. Please use this code to complete your registration. It will expire in 30 minutes. If you didn't initiate this request, please ignore this message. Thank you, Layla Security Team.`
@@ -4584,7 +4584,7 @@ app.post('/forgot-password', async (req, res) => {
 
     // Configure email options
     const mailOptions = {
-      from: 'YazanRestaurant@gmail.com',
+      from: process.env.smtp_email,
       to: email,
       subject: 'Password Reset Verification Code',
       text: `Here's your requested Layla password reset code: ${verificationCode}. Please do not share this code with anyone, use this code to continue with setting your new password. It will expire in 30 minutes for security purposes. If you didn't request this, please disregard this message and notify our support team immediately. Best regards, Layla Security Team`
@@ -4632,7 +4632,7 @@ app.post('/forgot-password-owner', async (req, res) => {
 
     // Configure email options
     const mailOptions = {
-      from: 'YazanRestaurant@gmail.com',
+      from: process.env.smtp_email,
       to: email,
       subject: 'Password Reset Verification Code',
       text: `Hey ${user.firstname}, here's your requested Layla password reset code: ${verificationCode}. Please do not share this code with anyone, use this code to continue with setting your new password. It will expire in 30 minutes for security purposes. If you didn't request this, please disregard this message and notify our support team immediately. Best regards, Layla Security Team`
@@ -4688,7 +4688,7 @@ app.post('/reset-password', async (req, res) => {
     });
 
     const mailOptions = {
-      from: 'YazanRestaurant@gmail.com',
+      from: process.env.smtp_email,
       to: email,
       subject: 'Password Changed Successfully',
       text: 'Your Layla account password has been successfully changed. If you did not initiate this change, please contact support immediately.'
@@ -4744,7 +4744,7 @@ app.post('/reset-password-owner', async (req, res) => {
     });
 
     const mailOptions = {
-      from: 'YazanRestaurant@gmail.com',
+      from: process.env.smtp_email,
       to: email,
       subject: 'Password Changed Successfully',
       text: `Hey ${user.firstname}, your Layla account password has been successfully changed. If you did not initiate this change, please contact support immediately.`
