@@ -722,6 +722,7 @@ app.post("/register-client", async (req, res) => {
       password: encryptedPassword,
       verificationCode, // Save verification code
       verificationCodeExpires: Date.now() + 30 * 60 * 1000, // Set expiration time (30 minutes)
+      verificationCodeSentAt: new Date()
     });
 
     // Send verification code to the user's email
@@ -738,6 +739,24 @@ app.post("/register-client", async (req, res) => {
     return res.send({ error: error.message });
   }
 });
+
+app.get('/last-verification-code-sent/:email', async (req, res) => {
+  const { email } = req.params;
+
+  try {
+      const client = await mongoose.model('ClientInfo').findOne({ email });
+      
+      if (!client) {
+          return res.status(404).json({ error: 'Client not found' });
+      }
+
+      const lastSentTime = client.verificationCodeSentAt;
+      res.json({ lastSentTime });
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
+
 
 // Verify code endpoint
 app.post("/verify-code/:email", async (req, res) => {
@@ -789,13 +808,19 @@ app.post("/resend-verification-code", async (req, res) => {
     if (!client) {
       return res.status(404).json({ error: "Client not found" });
     }
+    const now = new Date();
+    const timeSinceLastSent = (now - client.verificationCodeSentAt) / 1000 / 60; // Time in minutes
 
+    if (timeSinceLastSent < 5) {
+      return res.status(429).json({ error: "You can only request a new code every 5 minutes." });
+    }
     // Generate a new verification code
     const verificationCode = generateVerificationCode();
 
     // Update the client's verification code and expiration
     client.verificationCode = verificationCode;
     client.verificationCodeExpires = Date.now() + 30 * 60 * 1000; // Set expiration time (30 minutes)
+    client.verificationCodeSentAt = now;
     await client.save();
 
     // Send the new verification code to the user's email

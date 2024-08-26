@@ -9,6 +9,9 @@ const clientDetailsSchema = new mongoose.Schema({
     },
     password: String,
     verificationCode: String, // Field to store verification code
+    verificationCodeSentAt: { 
+        type: Date 
+    }, 
     isCodeVerified: { 
         type: Boolean, 
         default: false 
