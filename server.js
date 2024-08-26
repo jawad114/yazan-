@@ -23,7 +23,7 @@ const upload = multer({ storage });
 
 
 const corsOptions = {
-  origin: '*',
+  origin: 'https://laylamp.com',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
@@ -2962,6 +2962,14 @@ app.post("/add-to-cart/:customerId", async (req, res) => {
       cart = new Cart({ customerId, coordinates, products: [] });
     }
 
+    // Check if the cart already contains products from a different restaurant
+    if (cart.products.length > 0 && cart.products[0].orderFrom !== orderFrom) {
+      return res.status(400).json({ 
+        error: "Cannot add products from multiple market place",
+        message: "Cannot Add Items From Multiple Market Place."
+      });
+    }
+
     // Function to check if extras are equal
     const areExtrasEqual = (extras1, extras2) => {
       if (extras1.length !== extras2.length) return false;
@@ -2996,25 +3004,27 @@ app.post("/add-to-cart/:customerId", async (req, res) => {
 
 
 
+
 ///clear
 // authenticateUser, refreshAuthToken
 app.delete("/clear-cart/:customerId", async (req, res) => {
   const { customerId } = req.params;
 
   try {
-    // Find and delete all carts for the given customer
-    const result = await Cart.deleteMany({ customerId });
+    // Find and delete the cart for the given customer
+    const result = await Cart.deleteOne({ customerId });
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ error: "No carts found for this customer" });
+      return res.status(404).json({ error: "No cart found for this customer" });
     }
 
-    res.status(200).json({ status: "ok", message: "All carts cleared successfully" });
+    res.status(200).json({ status: "ok", message: "Cart cleared successfully" });
   } catch (error) {
-    console.error("Error clearing carts:", error);
+    console.error("Error clearing cart:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 
 // delete from cart
@@ -3023,23 +3033,20 @@ app.delete("/remove-from-cart/:productId/:customerId", async (req, res) => {
 
   try {
     // Find all carts for the given customer
-    const carts = await Cart.find({ customerId });
-    if (carts.length === 0) {
-      return res.status(404).json({ error: "No carts found for this customer" });
+    const cart = await Cart.findOne({ customerId });
+    if (!cart) {
+      return res.status(404).json({ error: "No cart found for this customer" });
     }
 
     let productRemoved = false;
 
-    // Iterate through each cart to find and remove the product
-    for (let cart of carts) {
-      const productIndex = cart.products.findIndex(product => product._id.toString() === productId);
 
+      const productIndex = cart.products.findIndex(product => product._id.toString() === productId);
       if (productIndex !== -1) {
         cart.products.splice(productIndex, 1);
         await cart.save();
         productRemoved = true;
       }
-    }
 
     if (!productRemoved) {
       return res.status(404).json({ error: "Product not found in any cart" });
@@ -3117,38 +3124,31 @@ app.put('/update-cart/:productId', async (req, res) => {
   }
 
   try {
-    // Find all carts for the given customer
-    const carts = await Cart.find({ customerId });
-    if (carts.length === 0) {
-      console.error('No carts found for customerId:', customerId);
-      return res.status(404).json({ error: 'No carts found for this customer' });
+    // Find the cart for the given customer
+    const cart = await Cart.findOne({ customerId });
+    if (!cart) {
+      console.error('No cart found for customerId:', customerId);
+      return res.status(404).json({ error: 'No cart found for this customer' });
     }
 
-    let updated = false;
+    // Find the product in the cart
+    const product = cart.products.find(p => p._id.toString() === productId);
 
-    // Iterate through each cart to find and update the product
-    for (let cart of carts) {
-      const product = cart.products.find(p => p._id.toString() === productId);
-
-      if (product) {
-        // Update the quantity of the found product
-        product.quantity = quantity;
-        await cart.save();
-        updated = true;
-      }
+    if (product) {
+      // Update the quantity of the found product
+      product.quantity = quantity;
+      await cart.save();
+      return res.status(200).json({ message: 'Cart item updated successfully' });
+    } else {
+      console.error('Product not found in cart with productId:', productId);
+      return res.status(404).json({ error: 'Product not found in cart' });
     }
-
-    if (!updated) {
-      console.error('Product not found in any cart with productId:', productId);
-      return res.status(404).json({ error: 'Product not found in any cart' });
-    }
-
-    res.status(200).json({ message: 'Cart item updated successfully' });
   } catch (error) {
     console.error('Error updating cart item:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 
 
