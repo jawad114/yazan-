@@ -38,6 +38,7 @@ const wss = new WebSocket.Server({ server });
 
 
 const nodemailer = require('nodemailer');
+const sendEmail = require("./mail/sendEmail");
 
 let clients = [];
 
@@ -724,32 +725,12 @@ app.post("/register-client", async (req, res) => {
     });
 
     // Send verification code to the user's email
-    const transporter = nodemailer.createTransport({
-      host: 'layla-res.com',
-      port: 465,
-      secure: true, // Use true for 465, false for other ports
-      auth: {
-        user: process.env.smtp_email, // Your Gmail email address
-        pass: process.env.smtp_password // Your Gmail password or App Password
-      }
-    });
-
-    // Configure email options
-    const mailOptions = {
-      from: process.env.smtp_email,
-      to: email,
-      subject: 'Account Verification',
-      text: `Hello, Your verification code is: ${verificationCode}. Please use this code to complete your registration. It will expire in 30 minutes. If you didn't initiate this request, please ignore this message. Thank you, Layla Security Team.`
-    };
-
-    // Send email
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Failed to send verification code' });
-      } else {
-        res.json({ message: 'Verification code sent successfully' });
-      }
+    await sendEmail({
+      email,
+      subject: 'Layla Account Verification',
+      verificationCode,
+      type: 'verify',
+      firstName: firstname,
     });
 
     return res.send({ status: "ok", message: "Verification code sent to your email" });
@@ -818,33 +799,15 @@ app.post("/resend-verification-code", async (req, res) => {
     await client.save();
 
     // Send the new verification code to the user's email
-    const transporter = nodemailer.createTransport({
-      host: 'layla-res.com',
-      port: 465,
-      secure: true, // Use true for 465, false for other ports
-      auth: {
-        user: process.env.smtp_email, // Your Gmail email address
-        pass: process.env.smtp_password // Your Gmail password or App Password
-      }
+    await sendEmail({
+      email,
+      subject: 'Layla New Verification Code',
+      verificationCode,
+      type: 'verify',
+      firstName: client.firstname,
     });
+    res.json({ message: 'New verification code sent successfully' });
 
-    // Configure email options
-    const mailOptions = {
-      from: process.env.smtp_email,
-      to: email,
-      subject: 'New Verification Code',
-      text: `Hello, Your new verification code is: ${verificationCode}. Please use this code to complete your registration. It will expire in 30 minutes. If you didn't initiate this request, please ignore this message. Thank you, Layla Security Team.`
-    };
-
-    // Send email
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Failed to send verification code' });
-      } else {
-        res.json({ message: 'New verification code sent successfully' });
-      }
-    });
 
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -4572,33 +4535,15 @@ app.post('/forgot-password', async (req, res) => {
     await user.save();
 
     // Create a transporter using Gmail SMTP
-    const transporter = nodemailer.createTransport({
-      host: 'layla-res.com',
-      port: 465,
-      secure: true, // Use true for 465, false for other ports
-      auth: {
-        user: process.env.smtp_email, // Your Gmail email address
-        pass: process.env.smtp_password // Your Gmail password or App Password
-      }
+    await sendEmail({
+      email,
+      subject: 'Layla Password Reset Verification Code',
+      verificationCode,
+      type: 'verify',
+      firstName: user.firstname,
     });
 
-    // Configure email options
-    const mailOptions = {
-      from: process.env.smtp_email,
-      to: email,
-      subject: 'Password Reset Verification Code',
-      text: `Here's your requested Layla password reset code: ${verificationCode}. Please do not share this code with anyone, use this code to continue with setting your new password. It will expire in 30 minutes for security purposes. If you didn't request this, please disregard this message and notify our support team immediately. Best regards, Layla Security Team`
-    };
-
-    // Send email
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Failed to send verification code' });
-      } else {
-        res.json({ message: 'Verification code sent successfully' });
-      }
-    });
+    res.json({ message: 'Verification code sent successfully' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -4619,34 +4564,15 @@ app.post('/forgot-password-owner', async (req, res) => {
     user.verificationCode = verificationCode;
     await user.save();
 
-    // Create a transporter using Gmail SMTP
-    const transporter = nodemailer.createTransport({
-      host: 'layla-res.com',
-      port: 465,
-      secure: true, // Use true for 465, false for other ports
-      auth: {
-        user: process.env.smtp_email, // Your Gmail email address
-        pass: process.env.smtp_password // Your Gmail password or App Password
-      }
+    await sendEmail({
+      email,
+      subject: 'Layla Password Reset Verification Code',
+      verificationCode,
+      type: 'verify',
+      firstName: user.firstname,
     });
 
-    // Configure email options
-    const mailOptions = {
-      from: process.env.smtp_email,
-      to: email,
-      subject: 'Password Reset Verification Code',
-      text: `Hey ${user.firstname}, here's your requested Layla password reset code: ${verificationCode}. Please do not share this code with anyone, use this code to continue with setting your new password. It will expire in 30 minutes for security purposes. If you didn't request this, please disregard this message and notify our support team immediately. Best regards, Layla Security Team`
-    };
-
-    // Send email
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Failed to send verification code' });
-      } else {
-        res.json({ message: 'Verification code sent successfully' });
-      }
-    });
+    res.json({ message: 'Verification code sent successfully' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -4677,31 +4603,14 @@ app.post('/reset-password', async (req, res) => {
     await user.save();
 
     // Send email notification
-    const transporter = nodemailer.createTransport({
-      host: 'layla-res.com',
-      port: 465,
-      secure: true, // Use true for 465, false for other ports
-    auth: {
-      user: process.env.smtp_email, // Your Gmail email address
-      pass: process.env.smtp_password // Your Gmail password or App Password
-    }
+    await sendEmail({
+      email,
+      subject: 'Layla Password Changed Successfully',
+      type: 'reset',
+      firstName: user.firstname,
     });
 
-    const mailOptions = {
-      from: process.env.smtp_email,
-      to: email,
-      subject: 'Password Changed Successfully',
-      text: 'Your Layla account password has been successfully changed. If you did not initiate this change, please contact support immediately.'
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Failed to send password change notification' });
-      } else {
-        res.json({ message: 'Password reset successfully. Notification sent to your email.' });
-      }
-    });
+    res.json({ message: 'Password reset successfully. Notification sent to your email.' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -4730,34 +4639,17 @@ app.post('/reset-password-owner', async (req, res) => {
     await user.save();
 
     // Send email notification
-    const transporter = nodemailer.createTransport({
-      // service: 'gmail',
-      // host: 'smtp.gmail.com',
-      // port: 587,
-    host: 'layla-res.com',
-    port: 465,
-    secure: true, // Use true for 465, false for other ports
-    auth: {
-      user: process.env.smtp_email, // Your Gmail email address
-      pass: process.env.smtp_password // Your Gmail password or App Password
-    }
+    // service: 'gmail',
+    // host: 'smtp.gmail.com',
+    // port: 587,
+    await sendEmail({
+      email,
+      subject: 'Layla Password Changed Successfully',
+      type: 'reset',
+      firstName: user.firstname,
     });
 
-    const mailOptions = {
-      from: process.env.smtp_email,
-      to: email,
-      subject: 'Password Changed Successfully',
-      text: `Hey ${user.firstname}, your Layla account password has been successfully changed. If you did not initiate this change, please contact support immediately.`
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Failed to send password change notification' });
-      } else {
-        res.json({ message: 'Password reset successfully. Notification sent to your email.' });
-      }
-    });
+    res.json({ message: 'Password reset successfully. Notification sent to your email.' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
