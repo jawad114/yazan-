@@ -14,7 +14,7 @@ const clientDetailsSchema = new mongoose.Schema({
     }, 
     isCodeVerified: { 
         type: Boolean, 
-        default: false 
+        default: true 
     }, // Field to indicate whether code is verified or not, default to false
     isLoggedIn: { 
         type: Boolean, 

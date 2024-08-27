@@ -27,6 +27,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
+
 // https://layla-marketplace.netlify.app
 
 app.use(cors(corsOptions))
@@ -711,7 +712,6 @@ app.post("/register-client", async (req, res) => {
       });
     }
 
-    const verificationCode = generateVerificationCode(); // Generate verification code
     const encryptedPassword = await bcrypt.hash(password, 10); // Encrypt password
 
     // Save user details and verification code to the database
@@ -720,21 +720,17 @@ app.post("/register-client", async (req, res) => {
       lastname,
       email,
       password: encryptedPassword,
-      verificationCode, // Save verification code
-      verificationCodeExpires: Date.now() + 30 * 60 * 1000, // Set expiration time (30 minutes)
-      verificationCodeSentAt: new Date()
     });
 
     // Send verification code to the user's email
     await sendEmail({
       email,
-      subject: 'Layla Account Verification',
-      verificationCode,
-      type: 'verify',
+      subject: 'Welcome to Layla - Your Account Has Been Successfully Created!',
+      type: 'welcome',
       firstName: firstname,
     });
 
-    return res.send({ status: "ok", message: "Verification code sent to your email" });
+    return res.send({ status: "ok", message: "Account Created Successfully" });
   } catch (error) {
     return res.send({ error: error.message });
   }
