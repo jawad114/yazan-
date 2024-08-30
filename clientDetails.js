@@ -7,6 +7,7 @@ const clientDetailsSchema = new mongoose.Schema({
         type: String, 
         unique: true 
     },
+    phoneNumber:{ type: String, unique: true},
     password: String,
     verificationCode: String, // Field to store verification code
     verificationCodeSentAt: { 
@@ -19,7 +20,8 @@ const clientDetailsSchema = new mongoose.Schema({
     isLoggedIn: { 
         type: Boolean, 
         default: false 
-    } // Field to indicate whether the user is logged in or not, default to false
+    }, // Field to indicate whether the user is logged in or not, default to false
+    fcmToken: String // Field to store FCM token
 }, {
     collection: "clientInfo"
 });

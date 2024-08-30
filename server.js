@@ -40,6 +40,7 @@ const wss = new WebSocket.Server({ server });
 
 const nodemailer = require('nodemailer');
 const sendEmail = require("./mail/sendEmail");
+const { sendFCMMessage } = require("./message/messageSender");
 
 let clients = [];
 
@@ -700,26 +701,73 @@ const generateVerificationCode = () => {
 
 
 // Register client endpoint
+// app.post("/register-client", async (req, res) => {
+//   const { firstname, lastname, email, password,phoneNumber } = req.body;
+
+//   try {
+//     // Check if a client with the provided email already exists
+//     const oldClient = await Clientt.findOne({ email });
+//     if (oldClient) {
+//       return res.status(400).send({
+//         error: "User with the same email address already exists",
+//       });
+//     }
+
+//     const encryptedPassword = await bcrypt.hash(password, 10); // Encrypt password
+
+//     // Save user details and verification code to the database
+//     const newClient = await Clientt.create({
+//       firstname,
+//       lastname,
+//       email,
+//       password: encryptedPassword,
+//     });
+
+//     // Send verification code to the user's email
+//     await sendEmail({
+//       email,
+//       subject: 'Welcome to Layla - Your Account Has Been Successfully Created!',
+//       type: 'welcome',
+//       firstName: firstname,
+//     });
+
+//     return res.send({ status: "ok", message: "Account Created Successfully" });
+//   } catch (error) {
+//     return res.send({ error: error.message });
+//   }
+// });
+
 app.post("/register-client", async (req, res) => {
-  const { firstname, lastname, email, password } = req.body;
+  const { firstname, lastname, email, password, phoneNumber, fcmToken } = req.body;
 
   try {
+    console.log('Fcm Token',fcmToken);
     // Check if a client with the provided email already exists
-    const oldClient = await Clientt.findOne({ email });
-    if (oldClient) {
+    const oldClientByEmail = await Clientt.findOne({ email });
+    if (oldClientByEmail) {
       return res.status(400).send({
         error: "User with the same email address already exists",
       });
     }
 
+    // Check if a client with the provided phone number already exists
+    const oldClientByPhone = await Clientt.findOne({ phoneNumber });
+    if (oldClientByPhone) {
+      return res.status(400).send({
+        error: "User with the same phone number already exists",
+      });
+    }
+
     const encryptedPassword = await bcrypt.hash(password, 10); // Encrypt password
 
-    // Save user details and verification code to the database
+    // Save user details to the database
     const newClient = await Clientt.create({
       firstname,
       lastname,
       email,
       password: encryptedPassword,
+      phoneNumber, // Save phone number
+      fcmToken // Save FCM token
     });
 
     // Send verification code to the user's email
@@ -730,9 +778,14 @@ app.post("/register-client", async (req, res) => {
       firstName: firstname,
     });
 
+    // Send a notification message to the user's phone number if needed
+    if (fcmToken) {
+      await sendFCMMessage(phoneNumber, 'Your account has been successfully created!');
+    }
+
     return res.send({ status: "ok", message: "Account Created Successfully" });
   } catch (error) {
-    return res.send({ error: error.message });
+    return res.status(500).send({ error: error.message });
   }
 });
 
@@ -3012,36 +3065,71 @@ app.delete("/clear-cart/:customerId", async (req, res) => {
 
 
 // delete from cart
+// app.delete("/remove-from-cart/:productId/:customerId", async (req, res) => {
+//   const { productId, customerId } = req.params;
+
+//   try {
+//     // Find all carts for the given customer
+//     const cart = await Cart.findOne({ customerId });
+//     if (!cart) {
+//       return res.status(404).json({ error: "No cart found for this customer" });
+//     }
+
+//     let productRemoved = false;
+
+
+//       const productIndex = cart.products.findIndex(product => product._id.toString() === productId);
+//       if (productIndex !== -1) {
+//         cart.products.splice(productIndex, 1);
+//         await cart.save();
+//         productRemoved = true;
+//       }
+
+//     if (!productRemoved) {
+//       return res.status(404).json({ error: "Product not found in any cart" });
+//     }
+
+//     res.status(200).json({ status: "ok", message: "Product removed from all carts", customerId });
+//   } catch (error) {
+//     console.error("Error removing product from carts:", error);
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
 app.delete("/remove-from-cart/:productId/:customerId", async (req, res) => {
   const { productId, customerId } = req.params;
 
   try {
-    // Find all carts for the given customer
+    // Find the cart for the given customer
     const cart = await Cart.findOne({ customerId });
     if (!cart) {
       return res.status(404).json({ error: "No cart found for this customer" });
     }
 
-    let productRemoved = false;
-
-
-      const productIndex = cart.products.findIndex(product => product._id.toString() === productId);
-      if (productIndex !== -1) {
-        cart.products.splice(productIndex, 1);
-        await cart.save();
-        productRemoved = true;
-      }
-
-    if (!productRemoved) {
-      return res.status(404).json({ error: "Product not found in any cart" });
+    // Find the product index in the cart
+    const productIndex = cart.products.findIndex(product => product._id.toString() === productId);
+    if (productIndex === -1) {
+      return res.status(404).json({ error: "Product not found in cart" });
     }
 
-    res.status(200).json({ status: "ok", message: "Product removed from all carts", customerId });
+    // Remove the product from the cart
+    cart.products.splice(productIndex, 1);
+
+    // If the cart has no products left, delete the cart
+    if (cart.products.length === 0) {
+      await Cart.deleteOne({ _id: cart._id });
+      return res.status(200).json({ status: "ok", message: "Cart deleted as it was empty", customerId });
+    }
+
+    // Save the cart if there are still products remaining
+    await cart.save();
+    res.status(200).json({ status: "ok", message: "Product removed from cart", customerId });
   } catch (error) {
-    console.error("Error removing product from carts:", error);
+    console.error("Error removing product from cart:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 
 // app.get("/get-cart/:customerId", async (req, res) => {
