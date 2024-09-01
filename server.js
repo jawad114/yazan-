@@ -789,6 +789,47 @@ app.post("/register-client", async (req, res) => {
   }
 });
 
+app.post("/change-password", async (req, res) => {
+  const { email, oldPassword, newPassword } = req.body;
+
+  try {
+    // Check if the client exists with the provided email
+    const client = await Clientt.findOne({ email });
+    if (!client) {
+      return res.status(404).send({
+        error: "لم يتم العثور على عميل بالبريد الإلكتروني المقدم",
+      });
+    }
+
+    // Verify the old password
+    const isPasswordCorrect = await bcrypt.compare(oldPassword, client.password);
+    if (!isPasswordCorrect) {
+      return res.status(401).send({
+        error: "كلمة المرور القديمة غير صحيحة",
+      });
+    }
+
+    // Encrypt the new password
+    const encryptedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the client's password
+    client.password = encryptedNewPassword;
+    await client.save();
+
+    // Send confirmation email
+    await sendEmail({
+      email,
+      subject: 'Your Password Has Been Successfully Changed',
+      type: 'reset',
+      firstName: client.firstname,
+    });
+
+    return res.send({ status: "ok", message: "تم تغيير كلمة المرور بنجاح" });
+  } catch (error) {
+    return res.status(500).send({ error: error.message });
+  }
+});
+
 app.get('/last-verification-code-sent/:email', async (req, res) => {
   const { email } = req.params;
 
