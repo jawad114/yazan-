@@ -116,7 +116,8 @@ app.get('/api/proxy', async (req, res) => {
 
 
 app.get("/", (req, res) => {
-  res.send(process.env.MONGO_URI);
+  // res.send(process.env.MONGO_URI);
+  res.send("Hello There");
 });
 
 
