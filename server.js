@@ -16,6 +16,12 @@ const axios = require('axios');
 const { ok } = require("assert");
 const cron = require('node-cron');
 const moment = require('moment-timezone');
+const couponRoutes = require('./routes/couponRoutes');
+const clientRoutes = require('./routes/clientRoutes');
+const Restaurant = require('./models/Restaurant'); // Adjust path as necessary
+const {MenuCategory} = require('./models/MenuCategory'); // Adjust path as necessary
+const Coupon = require('./models/Coupon');
+
 
 
 const storage = multer.memoryStorage();
@@ -23,12 +29,11 @@ const upload = multer({ storage });
 
 
 const corsOptions = {
-  origin: 'https://laylamp.com',
+  origin: '*',
   allowedHeaders: ['Content-Type', 'Authorization'] // Add other headers as needed
 };
 
-
-// https://layla-marketplace.netlify.app
+// https://www.laylamp.com
 
 app.use(cors(corsOptions))
 
@@ -40,7 +45,7 @@ const wss = new WebSocket.Server({ server });
 
 const nodemailer = require('nodemailer');
 const sendEmail = require("./mail/sendEmail");
-const { sendFCMMessage } = require("./message/messageSender");
+// const { sendFCMMessage } = require("./message/messageSender");
 
 let clients = [];
 
@@ -120,11 +125,6 @@ app.get("/", (req, res) => {
   res.send("Hello There");
 });
 
-
-// mongoose
-//   .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-//   .then(() => console.log("MongoDb connected"))
-//   .catch((error) => console.log(error));
 
 async function connectToMongoDB() {
   try {
@@ -236,32 +236,11 @@ require("./ownerDetails");
 const Ownerr = mongoose.model("OwnerInfo");
 
 
-// app.post("/login-owner", async (req, res) => {
-//   const { email, password } = req.body;
-//   try {
-//     const owner = await Ownerr.findOne({ email });
-//     if (!owner) {
-//       return res.json({ error: "User not found" });
-//     }
+// Coupon Endpoint
 
-//     const isPasswordValid = await bcrypt.compare(password, owner.password);
-//     if (!isPasswordValid) {
-//       return res.json({ error: "Invalid password" });
-//     }
+app.use('/coupon', couponRoutes);
+app.use('/client', clientRoutes);
 
-//     // Find the restaurant with the restaurant name of the owner
-//     const restaurant = await Restaurant.findOne({ restaurantName: owner.firstname });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     const token = generateToken(owner._id);
-
-//     return res.json({ status: "ok", id: owner._id, token, resName: owner.firstname, restaurantId: restaurant._id, name: owner.firstname + " " + owner.lastname });
-//   } catch (e) {
-//     return res.json({ status: e.message });
-//   }
-// });
 
 
 const SliderImageSchema = new mongoose.Schema({
@@ -692,51 +671,13 @@ app.get("/owner/:id", async (req, res) => {
 
 
 //client
-require("./clientDetails");
-const Clientt = mongoose.model("ClientInfo");
+
+const Clientt = require("./clientDetails");
 
 const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000); // Generate a 6-digit code
 };
 
-
-
-// Register client endpoint
-// app.post("/register-client", async (req, res) => {
-//   const { firstname, lastname, email, password,phoneNumber } = req.body;
-
-//   try {
-//     // Check if a client with the provided email already exists
-//     const oldClient = await Clientt.findOne({ email });
-//     if (oldClient) {
-//       return res.status(400).send({
-//         error: "User with the same email address already exists",
-//       });
-//     }
-
-//     const encryptedPassword = await bcrypt.hash(password, 10); // Encrypt password
-
-//     // Save user details and verification code to the database
-//     const newClient = await Clientt.create({
-//       firstname,
-//       lastname,
-//       email,
-//       password: encryptedPassword,
-//     });
-
-//     // Send verification code to the user's email
-//     await sendEmail({
-//       email,
-//       subject: 'Welcome to Layla - Your Account Has Been Successfully Created!',
-//       type: 'welcome',
-//       firstName: firstname,
-//     });
-
-//     return res.send({ status: "ok", message: "Account Created Successfully" });
-//   } catch (error) {
-//     return res.send({ error: error.message });
-//   }
-// });
 
 app.post("/register-client", async (req, res) => {
   const { firstname, lastname, email, password, phoneNumber, fcmToken } = req.body;
@@ -780,9 +721,9 @@ app.post("/register-client", async (req, res) => {
     });
 
     // Send a notification message to the user's phone number if needed
-    if (fcmToken) {
-      await sendFCMMessage(phoneNumber, 'Your account has been successfully created!');
-    }
+    // if (fcmToken) {
+    //   await sendFCMMessage(phoneNumber, 'Your account has been successfully created!');
+    // }
 
     return res.send({ status: "ok", message: "Account Created Successfully" });
   } catch (error) {
@@ -1023,9 +964,6 @@ const generateRandomPassword = () => {
   return password;
 };
 
-// const Dish = mongoose.model("DishInfo");
-// const MenuCategory = mongoose.model("MenuCategory");
-
 // Middleware to add restaurant owner after adding a restaurant
 const addRestaurantOwner = async (req, res, next) => {
   const { restaurantName } = req.body;
@@ -1107,116 +1045,9 @@ const DishSchema = new mongoose.Schema({
 });
 
 
-
-// Define Menu Category Schema
-// Define Menu Category Schema
-const MenuCategorySchema = new mongoose.Schema({
-  categoryName: String,
-  categoryImage: String,
-  dishes: [{
-    name: String,
-    price: Number,
-    dishImage: String,
-    description: String,
-    visibility: {
-      type: Boolean,
-      default: true // Default value is true
-    },
-    extras: {
-      requiredExtras: {
-        type: [{
-          name: String,
-          price: Number,
-       
-        }],
-        default: []
-      },
-      optionalExtras: {
-        type: [{
-          name: String,
-          price: Number
-        }],
-        default: []
-      }
-    }
-  }]
-});
-
-
-
-
-
-// Define Restaurant Schema
-const RestaurantsSchema = new mongoose.Schema({
-  restaurantName: { type: String, required: true },
-  picture: { type: String, required: true },
-  location: { type: String },
-  coordinates: {
-    latitude: { type: Number, required: false },
-    longitude: { type: Number, required: false }
-  },
-  menu: [MenuCategorySchema],
-  contact: { type: String},
-  availableOptions:{
-    'delivery':{type: Boolean, default: true},
-    'dine-in':{type: Boolean, default: true},
-    'self-pickup':{type: Boolean, default: true},
-  },
-  generatedEmail: { type: String},
-  generatedPassword: { type: String},
-  deliveryCharges: {
-    type: Map,
-    of: Number, // Key: city name, Value: delivery charge
-  },
-  statusByTimezone: {
-    'Asia/Karachi': { status: String },
-    'Asia/Jerusalem': { status: String },
-    // Add other timezones as needed
-  },
-  openingHours: {
-    sunday: {
-      open: { type: String, default: "00:00" }, // Default to midnight if not specified
-      close: { type: String, default: "00:00" } // Default to midnight if not specified
-    },
-    monday: {
-      open: { type: String, default: "00:00" },
-      close: { type: String, default: "00:00" }
-    },
-    tuesday: {
-      open: { type: String, default: "00:00" },
-      close: { type: String, default: "00:00" }
-    },
-    wednesday: {
-      open: { type: String, default: "00:00" },
-      close: { type: String, default: "00:00" }
-    },
-    thursday: {
-      open: { type: String, default: "00:00" },
-      close: { type: String, default: "00:00" }
-    },
-    friday: {
-      open: { type: String, default: "00:00" },
-      close: { type: String, default: "00:00" }
-    },
-    saturday: {
-      open: { type: String, default: "00:00" },
-      close: { type: String, default: "00:00" }
-    }
-  },
-  status: { type: String, enum: ['open', 'closed', 'busy'], default: 'open' }
-}, {
-  collection: "restaurantInfo"
-});
-
-const Restaurant = mongoose.model("RestaurantInfo", RestaurantsSchema);
-
-
 // Create Dish model
 const Dish = mongoose.model("Dish", DishSchema);
 
-// Create Menu Category model
-// const MenuCategory = mongoose.model("MenuCategory"\, MenuCategorySchema);
-const MenuCategory = mongoose.model("MenuCategory", MenuCategorySchema);
 
 
 
@@ -1395,19 +1226,19 @@ cron.schedule('*/3 * * * *', async () => {
     const currentHour = currentTime.hour();
     const currentMinute = currentTime.minute();
 
-    console.log('Current Time:', currentTime.format('HH:mm'));
-    console.log('Current Hour:', currentHour);
-    console.log('Current Minute:', currentMinute);
-    console.log('Current Day:', currentDay);
+    // console.log('Current Time:', currentTime.format('HH:mm'));
+    // console.log('Current Hour:', currentHour);
+    // console.log('Current Minute:', currentMinute);
+    // console.log('Current Day:', currentDay);
 
     const restaurants = await Restaurant.find();
-    console.log('Number of restaurants found:', restaurants.length);
+    // console.log('Number of restaurants found:', restaurants.length);
 
     for (const restaurant of restaurants) {
-      console.log(`Checking restaurant: ${restaurant.restaurantName}`);
+      // console.log(`Checking restaurant: ${restaurant.restaurantName}`);
 
       const openingHours = restaurant.openingHours[currentDay];
-      console.log('Opening hours for today:', openingHours);
+      // console.log('Opening hours for today:', openingHours);
 
       if (openingHours) {
         const { open, close } = openingHours;
@@ -1415,124 +1246,50 @@ cron.schedule('*/3 * * * *', async () => {
         const openTime = moment(open, "HH:mm");
         const closeTime = moment(close, "HH:mm");
 
-        console.log('Open time:', openTime.format('HH:mm'));
-        console.log('Close time:', closeTime.format('HH:mm'));
+        // console.log('Open time:', openTime.format('HH:mm'));
+        // console.log('Close time:', closeTime.format('HH:mm'));
 
         if (closeTime.isBefore(openTime)) {
           closeTime.add(1, 'day');
-          console.log('Adjusted close time for post-midnight closing:', closeTime.format('HH:mm'));
+          // console.log('Adjusted close time for post-midnight closing:', closeTime.format('HH:mm'));
         }
 
         let adjustedCurrentTime = moment(currentTime.format("HH:mm"), "HH:mm");
-        console.log('Adjusted current time:', adjustedCurrentTime.format('HH:mm'));
+        // console.log('Adjusted current time:', adjustedCurrentTime.format('HH:mm'));
 
         if (adjustedCurrentTime.isBefore(openTime)) {
           adjustedCurrentTime.add(1, 'day');
-          console.log('Adjusted current time after adding a day:', adjustedCurrentTime.format('HH:mm'));
+          // console.log('Adjusted current time after adding a day:', adjustedCurrentTime.format('HH:mm'));
         }
 
         const isOpen = adjustedCurrentTime.isBetween(openTime, closeTime, null, '[)');
-        console.log(`Is the restaurant open? ${isOpen}`);
+        // console.log(`Is the restaurant open? ${isOpen}`);
 
         if (isOpen) {
           if (restaurant.status !== 'open') {
             restaurant.status = 'open';
             await restaurant.save();
-            console.log(`Restaurant ${restaurant.restaurantName} is now open.`);
+            // console.log(`Restaurant ${restaurant.restaurantName} is now open.`);
           } else {
-            console.log(`Restaurant ${restaurant.restaurantName} is already open.`);
+            // console.log(`Restaurant ${restaurant.restaurantName} is already open.`);
           }
         } else {
           if (restaurant.status !== 'closed') {
             restaurant.status = 'closed';
             await restaurant.save();
-            console.log(`Restaurant ${restaurant.restaurantName} is now closed.`);
+            // console.log(`Restaurant ${restaurant.restaurantName} is now closed.`);
           } else {
-            console.log(`Restaurant ${restaurant.restaurantName} is already closed.`);
+            // console.log(`Restaurant ${restaurant.restaurantName} is already closed.`);
           }
         }
       } else {
-        console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay}.`);
+        // console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay}.`);
       }
     }
   } catch (error) {
     console.error('Error updating restaurant statuses:', error);
   }
 });
-
-
-
-
-
-// cron.schedule('*/3 * * * *', async () => {
-//   try {
-//     console.log('Cron job started');
-
-//     const restaurants = await Restaurant.find();
-//     console.log('Number of restaurants found:', restaurants.length);
-
-//     for (const restaurant of restaurants) {
-//       console.log(`Checking restaurant: ${restaurant.restaurantName}`);
-
-//       let statusChanged = false;
-
-//       for (const timezone of timezones) {
-//         const currentTime = moment().tz(timezone);
-//         const currentDay = currentTime.format("dddd").toLowerCase();
-
-//         console.log(`Current Time in ${timezone}: ${currentTime.format('HH:mm')}`);
-//         const openingHours = restaurant.openingHours[currentDay];
-
-//         if (openingHours) {
-//           const { open, close } = openingHours;
-
-//           const openTime = moment.tz(open, "HH:mm", timezone);
-//           const closeTime = moment.tz(close, "HH:mm", timezone);
-
-//           console.log(`Open time in ${timezone}: ${openTime.format('HH:mm')}`);
-//           console.log(`Close time in ${timezone}: ${closeTime.format('HH:mm')}`);
-
-//           if (closeTime.isBefore(openTime)) {
-//             closeTime.add(1, 'day');
-//             console.log(`Adjusted close time for post-midnight closing in ${timezone}: ${closeTime.format('HH:mm')}`);
-//           }
-
-//           // Directly use currentTime for comparison
-//           const isOpen = currentTime.isBetween(openTime, closeTime, null, '[)');
-//           console.log(`Is the restaurant open in ${timezone}? ${isOpen}`);
-
-//           if (isOpen) {
-//             if (restaurant.statusByTimezone[timezone]?.status !== 'open') {
-//               restaurant.statusByTimezone[timezone] = { status: 'open' };
-//               statusChanged = true;
-//               console.log(`Restaurant ${restaurant.restaurantName} is now open in ${timezone}.`);
-//             } else {
-//               console.log(`Restaurant ${restaurant.restaurantName} is already open in ${timezone}.`);
-//             }
-//           } else {
-//             if (restaurant.statusByTimezone[timezone]?.status !== 'closed') {
-//               restaurant.statusByTimezone[timezone] = { status: 'closed' };
-//               statusChanged = true;
-//               console.log(`Restaurant ${restaurant.restaurantName} is now closed in ${timezone}.`);
-//             } else {
-//               console.log(`Restaurant ${restaurant.restaurantName} is already closed in ${timezone}.`);
-//             }
-//           }
-//         } else {
-//           console.log(`No opening hours found for ${restaurant.restaurantName} on ${currentDay} in ${timezone}.`);
-//         }
-//       }
-
-//       // Save the restaurant status only if any status has changed
-//       if (statusChanged) {
-//         await restaurant.save();
-//       }
-//     }
-//   } catch (error) {
-//     console.error('Error updating restaurant statuses:', error);
-//   }
-// });
-
 
 
 // API endpoint to change restaurant status
@@ -1663,89 +1420,6 @@ app.get("/opening-hours/:restaurantName", async (req, res) => {
 });
 
 
-
-
-// Route to add a new restaurant
-// app.post("/add-restaurant", upload.single('picture'), addRestaurantOwner, async (req, res) => {
-//   const { restaurantName, location} = req.body;
-
-//   try {
-//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
-//     if (existingRestaurant) {
-//       return res.status(400).json({ error: "Restaurant with the same name already exists" });
-//     }
-
-//     // Upload picture to Cloudinary
-//     let pictureUrl;
-//     if (req.file) {
-//       const result = await cloudinaryService.addImage(req.file.buffer);
-//       pictureUrl = result.secure_url;
-//     }
-
-//     // Fetch coordinates using Google Maps Geocoding API
-//     // const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=your-api-here`);
-//     // console.log(geocodingResponse.data);
-//     // const { results } = geocodingResponse.data;
-//     // const coordinates = results[0].geometry.location;
-
-//     // let menuCategories = [];
-//     // if (menu) {
-//     //   menuCategories = await Promise.all(menu.map(async categoryData => {
-//     //     const dishes = await Promise.all(categoryData.dishes.map(async dishData => {
-//     //       const dish = new Dish({
-//     //         name: dishData.name,
-//     //         price: dishData.price,
-//     //         dishImage: dishData.dishImage,
-//     //         description: dishData.description,
-//     //         extras: {
-//     //           requiredExtras: dishData.requiredExtras,
-//     //           optionalExtras: dishData.optionalExtras
-//     //         }
-//     //       });
-
-//     //       await dish.save();
-//     //       return dish;
-//     //     }));
-
-//     //     const menuCategory = new MenuCategory({
-//     //       categoryName: categoryData.categoryName,
-//     //       dishes
-//     //     });
-
-//     //     await menuCategory.save();
-//     //     return menuCategory;
-//     //   }));
-//     // }
-
-//     const newRestaurant = new Restaurant({
-//       restaurantName,
-//       picture: pictureUrl,
-//       location,
-//       coordinates: {
-//         latitude: '78', // Replace with actual coordinates
-//         longitude: '68' // Replace with actual coordinates
-//       },
-//       // menu: menuCategories.length > 0 ? menuCategories : undefined,
-//       generatedEmail: req.generatedEmail,
-//       generatedPassword: req.generatedPassword
-//     });
-
-//     // Save the new restaurant to the database
-//     await newRestaurant.save();
-
-//     return res.status(201).json({
-//       status: "ok",
-//       message: "Restaurant added successfully",
-//       generatedEmail: req.generatedEmail,
-//       generatedPassword: req.generatedPassword
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-
 const addRestaurant = async (req, res, next) => {
   const { restaurantName, location,coordinates } = req.body;
 
@@ -1855,86 +1529,6 @@ app.delete("/remove-from-favorites/:customerId", async (req, res) => {
   }
 });
 
-
-
-
-
-//update restaurant
-// Route to update a restaurant
-// app.put("/update-restaurant/:resName", async (req, res) => {
-//   const { resName } = req.params;
-//   const { newRestaurantName, newBase64Image, newLocation, newMenu } = req.body;
-
-//   try {
-//     // Find the restaurant by name
-//     let restaurant = await Restaurant.findOne({ restaurantName: resName });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Update the restaurant details
-//     if (newRestaurantName) {
-//       restaurant.restaurantName = newRestaurantName;
-
-//       // Update the owner's firstname with the new restaurant name
-//       const owner = await Ownerr.findOneAndUpdate(
-//         { firstname: resName }, // Query to find the owner by the current restaurant name
-//         { firstname: newRestaurantName }, // Update the owner's firstname with the new restaurant name
-//         { new: true } // To return the updated document
-//       );
-//     }
-//     if (newBase64Image) {
-//       restaurant.picture = newBase64Image;
-//     }
-//     if (newLocation) {
-//       restaurant.location = newLocation;
-//     }
-//     if (newMenu) {
-//       // Clear existing menu categories and dishes
-//       restaurant.menu = [];
-
-//       // Construct new menu categories with dishes
-//       const menuCategories = await Promise.all(newMenu.map(async category => {
-//         const dishes = await Promise.all(category.dishes.map(async dishData => {
-//           const dishExtras = dishData.extras && dishData.extras.map(extra => ({
-//             name: extra.name,
-//             price: extra.price
-//           }));
-
-//           const dish = new Dish({
-//             name: dishData.name,
-//             price: dishData.price,
-//             dishImage: dishData.dishImage,
-//             description: dishData.description,
-//             extras: dishExtras
-//           });
-
-//           await dish.save();
-//           return dish;
-//         }));
-
-//         const menuCategory = new MenuCategory({
-//           categoryName: category.categoryName,
-//           dishes: dishes
-//         });
-//         await menuCategory.save();
-
-//         return menuCategory;
-//       }));
-
-//       restaurant.menu = menuCategories;
-//     }
-
-//     // Save the updated restaurant
-//     await restaurant.save();
-
-//     return res.status(200).json({ status: "ok", message: "Restaurant updated successfully", resName: newRestaurantName, name: newRestaurantName + " " + "Owner" });
-//   } catch (error) {
-//     console.error("Error updating restaurant:", error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
 app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (req, res) => {
   const { resName } = req.params;
   const { newRestaurantName, newLocation,newContact,updatedCoordinates } = req.body;
@@ -2026,123 +1620,6 @@ app.put("/update-restaurant/:resName", upload.single('restaurantImage'), async (
   }
 });
 
-
-
-// API endpoint to add dishes and menu items to an existing restaurant
-// app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
-//   const { restaurantName } = req.params;
-//   const { menu } = req.body;
-
-//   try {
-//     // Find the restaurant by name
-//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
-
-//     if (!existingRestaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Construct menu categories with dishes
-//     const menuCategories = await Promise.all(menu && menu.map(async category => {
-//       const dishes = await Promise.all(category.dishes && category.dishes.map(async dishData => {
-//         const dishOptionalExtras = dishData.optionalExtras && dishData.optionalExtras.map(optionalExtra => ({
-//           name: optionalExtra.name,
-//           price: optionalExtra.price
-//         }));
-//         const dishRequiredExtras = dishData.requiredExtras && dishData.requiredExtras.map(requiredExtra => ({
-//           name: requiredExtra.name,
-//           price: requiredExtra.price
-//         }));
-
-//         const dish = new Dish({
-//           name: dishData.name,
-//           price: dishData.price,
-//           dishImage: dishData.dishImage,
-//           description: dishData.description,
-//           extras: {
-//             requiredExtras: dishRequiredExtras,
-//             optionalExtras: dishOptionalExtras,
-//           }
-//         });
-
-//         await dish.save();
-//         return dish;
-//       }));
-
-//       const menuCategory = new MenuCategory({
-//         categoryName: category.categoryName,
-//         dishes: dishes
-//       });
-//       await menuCategory.save();
-
-//       return menuCategory;
-//     }));
-
-//     // Add new menu categories to the existing restaurant
-//     existingRestaurant.menu.push(...menuCategories);
-//     await existingRestaurant.save();
-
-//     return res.status(201).json({
-//       status: "ok",
-//       message: "Menu items added to the restaurant successfully"
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-
-// app.post("/add-menu-to-restaurant/:restaurantName", async (req, res) => {
-//   const { restaurantName } = req.params;
-//   const { menu } = req.body;
-
-//   try {
-//     // Find the restaurant by name
-//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
-
-//     if (!existingRestaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Check if menu is provided
-//     if (!menu || !Array.isArray(menu)) {
-//       return res.status(400).json({ error: "Invalid menu format" });
-//     }
-
-//     // Construct menu categories without dishes
-//     const menuCategories = await Promise.all(menu.map(async category => {
-//       if (!category || !category.categoryName) {
-//         // Skip if category or categoryName is not provided
-//         return null;
-//       }
-
-//       const menuCategory = new MenuCategory({
-//         categoryName: category.categoryName,
-//         categoryImage: category.categoryImage,
-//       });
-      
-//       await menuCategory.save();
-//       return menuCategory;
-//     }));
-
-//     // Remove any null values from the array (categories with no valid data)
-//     const validMenuCategories = menuCategories.filter(category => category !== null);
-
-//     // Add new menu categories to the existing restaurant
-//     existingRestaurant.menu.push(...validMenuCategories);
-//     await existingRestaurant.save();
-
-//     return res.status(201).json({
-//       status: "ok",
-//       message: "Menu categories added to the restaurant successfully"
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-
 app.post("/add-menu-to-restaurant/:restaurantName", upload.array('categoryImages'), async (req, res) => {
   const { restaurantName } = req.params;
   let menu;
@@ -2206,46 +1683,6 @@ app.post("/add-menu-to-restaurant/:restaurantName", upload.array('categoryImages
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
-// Update category endpoint
-// app.put("/update-category/:restaurantName/:categoryName", async (req, res) => {
-//   const { restaurantName, categoryName } = req.params;
-//   const { newCategoryName, categoryImage } = req.body;
-
-//   try {
-//     console.log('Restaurant Name',restaurantName);
-//     console.log('Category Name',categoryName);
-//     console.log('New Category Name',newCategoryName);
-//     // Find the restaurant by name
-//     const existingRestaurant = await Restaurant.findOne({ restaurantName });
-
-//     if (!existingRestaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Find the category by name
-//     const category = existingRestaurant.menu.find(cat => cat.categoryName === categoryName);
-
-//     if (!category) {
-//       return res.status(404).json({ error: "Category not found" });
-//     }
-
-//     // Update category details
-//     category.categoryName = newCategoryName || category.categoryName;
-//     category.categoryImage = categoryImage || category.categoryImage;
-
-//     await existingRestaurant.save();
-
-//     return res.status(200).json({
-//       status: "ok",
-//       message: "Category updated successfully"
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
 
 app.put("/update-category/:restaurantName/:categoryName", upload.single('categoryImage'), async (req, res) => {
   const { restaurantName, categoryName } = req.params;
@@ -2368,57 +1805,6 @@ app.delete("/delete-category/:restaurantName/:categoryName", async (req, res) =>
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
-
-
-
-// app.put("/update-dish/:resName/:categoryName/:dishId", authenticateUser, refreshAuthToken, async (req, res) => {
-//   const { resName, categoryName, dishId } = req.params;
-//   const { name, price, description, dishImage } = req.body;
-
-//   try {
-//     // Find the restaurant by name
-//     let restaurant = await Restaurant.findOne({ restaurantName: resName });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Find the menu category by category name
-//     let category = restaurant.menu.find((cat) => cat.categoryName === categoryName);
-//     if (!category) {
-//       return res.status(404).json({ error: "Category not found" });
-//     }
-
-//     // Find the dish in the category's dishes array by dish id
-//     let dish = category.dishes.id(dishId);
-//     if (!dish) {
-//       return res.status(404).json({ error: "Dish not found" });
-//     }
-
-//     // Update the dish details
-//     if (name) {
-//       dish.name = name;
-//     }
-//     if (price) {
-//       dish.price = price;
-//     }
-//     if (description) {
-//       dish.description = description;
-//     }
-//     if (dishImage) {
-//       dish.dishImage = dishImage;
-//     }
-
-//     // Save the updated restaurant
-//     await restaurant.save();
-
-//     return res.status(200).json({ status: "ok", message: "Dish updated successfully", data: dish });
-//   } catch (error) {
-//     console.error("Error updating dish:", error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-
-// });
 
 
 app.put("/update-dish/:resName/:categoryName/:dishId", upload.single('dishImage'), async (req, res) => {
@@ -2664,62 +2050,6 @@ app.delete("/delete-dish/:resName/:categoryName/:dishId", async (req, res) => {
 });
 
 
-
-
-
-
-
-// delete restaurant
-// Route to delete a restaurant by name
-// app.delete("/delete-restaurant/:resName", async (req, res) => {
-//   const { resName } = req.params;
-
-//   try {
-//     // Find the restaurant by name
-//     const restaurant = await Restaurant.findOne({ restaurantName: resName });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Delete the restaurant
-//     await restaurant.remove();
-
-//     // If you have any additional cleanup or cascade delete operations, you can perform them here
-
-//     return res.status(200).json({ status: "ok", message: "Restaurant deleted successfully" });
-//   } catch (error) {
-//     console.error("Error deleting restaurant:", error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-
-// app.delete("/delete-restaurant/:resName", async (req, res) => {
-//   const { resName } = req.params;
-
-//   try {
-//     // Find the restaurant by name
-//     const restaurant = await Restaurant.findOne({ restaurantName: resName });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Find the owner by restaurant name and delete the owner
-//     await Ownerr.deleteOne({ firstname: resName });
-
-//     // Delete the restaurant
-//     await Restaurant.deleteOne({ restaurantName: resName });
-
-//     // If you have any additional cleanup or cascade delete operations, you can perform them here
-
-//     return res.status(200).json({ status: "ok", message: "Restaurant deleted successfully" });
-//   } catch (error) {
-//     console.error("Error deleting restaurant:", error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-
 app.delete("/delete-restaurant/:resName", async (req, res) => {
   const { resName } = req.params;
 
@@ -2817,57 +2147,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-// app.get("/search-categories/:restaurantName", async (req, res) => {
-//   const { restaurantName } = req.params;
-//   const { searchTerm } = req.query; // Get search term from query parameters
-
-//   try {
-//     // Find the restaurant by name
-//     const restaurant = await Restaurant.findOne({ restaurantName });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Construct search query
-//     let searchQuery = {};
-//     if (searchTerm) {
-//       const regex = new RegExp(searchTerm, 'i'); // Case-insensitive search
-//       searchQuery = {
-//         $or: [
-//           { 'menu.categoryName': regex },
-//           { 'menu.dishes.name': regex },
-//           { 'menu.dishes.description': regex }
-//         ]
-//       };
-//     }
-
-//     // Find categories matching the search term
-//     const categories = restaurant.menu.filter(category => {
-//       return category.categoryName.match(searchQuery.$or.find(query => query['menu.categoryName'])) ||
-//         category.dishes.some(dish =>
-//           dish.name.match(searchQuery.$or.find(query => query['menu.dishes.name'])) ||
-//           dish.description.match(searchQuery.$or.find(query => query['menu.dishes.description']))
-//         );
-//     }).map(category => ({
-//       categoryName: category.categoryName,
-//       categoryImage: category.categoryImage,
-//       dishes: category.dishes.filter(dish =>
-//         dish.name.match(searchQuery.$or.find(query => query['menu.dishes.name'])) ||
-//         dish.description.match(searchQuery.$or.find(query => query['menu.dishes.description']))
-//       )
-//     }));
-
-//     if (categories.length === 0) {
-//       return res.status(201).json({ status: "notfound", restaurantImage: restaurant.picture, contact: restaurant.contact });
-//     }
-
-//     return res.status(200).json({ status: "ok", categories, restaurantImage: restaurant.picture, contact: restaurant.contact });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
 app.get("/search-categories/:restaurantName", async (req, res) => {
   const { restaurantName } = req.params;
   const searchTerm = req.query.q; // Get search term from query parameters
@@ -2920,62 +2199,6 @@ app.get("/search-categories/:restaurantName", async (req, res) => {
   }
 });
 
-
-
-// const CartSchema = new mongoose.Schema({
-//   customerId: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'Customer',
-//     required: true
-//   },
-//   products: [{
-//     productId: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: 'Product',
-//       required: true
-//     },
-//     quantity: {
-//       type: Number,
-//       required: true
-//     },
-//     name: {
-//       type: String,
-//       required: true
-//     },
-//     price: {
-//       type: Number,
-//       required: true
-//     }
-//   }],
-// });
-// const Cart = mongoose.model("Cart", CartSchema);
-// app.post("/add-to-cart/:customerId", async (req, res) => {
-//   const { productId, quantity, name, description, price } = req.body;
-//   const { customerId } = req.params;
-
-//   try {
-//     let cart = await Cart.findOne({ customerId });
-//     if (!cart) {
-//       cart = new Cart({ customerId, products: [] });
-//     }
-
-//     const existingProductIndex = cart.products.findIndex(product => product.productId.toString() === productId);
-//     if (existingProductIndex !== -1) {
-//       // If product exists, update its quantity
-//       cart.products[existingProductIndex].quantity += quantity;
-//     } else {
-//       // If product does not exist, add it with given quantity, name, description, and price
-//       cart.products.push({ productId, quantity, name, description, price });
-//     }
-
-//     await cart.save();
-
-//     res.status(200).json({ status: "ok", message: "Product added to cart", id: cart.customerId, products: cart.products });
-//   } catch (error) {
-//     console.error("Error adding product to cart:", error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 const CartSchema = new mongoose.Schema({
   customerId: {
@@ -3080,10 +2303,6 @@ app.post("/add-to-cart/:customerId", async (req, res) => {
   }
 });
 
-
-
-
-
 ///clear
 // authenticateUser, refreshAuthToken
 app.delete("/clear-cart/:customerId", async (req, res) => {
@@ -3103,40 +2322,6 @@ app.delete("/clear-cart/:customerId", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
-
-
-// delete from cart
-// app.delete("/remove-from-cart/:productId/:customerId", async (req, res) => {
-//   const { productId, customerId } = req.params;
-
-//   try {
-//     // Find all carts for the given customer
-//     const cart = await Cart.findOne({ customerId });
-//     if (!cart) {
-//       return res.status(404).json({ error: "No cart found for this customer" });
-//     }
-
-//     let productRemoved = false;
-
-
-//       const productIndex = cart.products.findIndex(product => product._id.toString() === productId);
-//       if (productIndex !== -1) {
-//         cart.products.splice(productIndex, 1);
-//         await cart.save();
-//         productRemoved = true;
-//       }
-
-//     if (!productRemoved) {
-//       return res.status(404).json({ error: "Product not found in any cart" });
-//     }
-
-//     res.status(200).json({ status: "ok", message: "Product removed from all carts", customerId });
-//   } catch (error) {
-//     console.error("Error removing product from carts:", error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 app.delete("/remove-from-cart/:productId/:customerId", async (req, res) => {
   const { productId, customerId } = req.params;
@@ -3172,26 +2357,6 @@ app.delete("/remove-from-cart/:productId/:customerId", async (req, res) => {
   }
 });
 
-
-
-// app.get("/get-cart/:customerId", async (req, res) => {
-//   const { customerId } = req.params;
-
-//   // const customerId = req.customerId; // Assuming you pass the customerId as a query parameter
-
-//   try {
-//     const cart = await Cart.findOne({ customerId });
-//     if (!cart) {
-//       return res.status(404).json({ error: "Cart not found" });
-//     }
-//     const totalItemsCount = cart.products.reduce((acc, product) => acc + product.quantity, 0);
-
-//     res.status(200).json({ cart, totalItemsCount });
-//   } catch (error) {
-//     console.error("Error fetching cart:", error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 app.get("/get-cart/:customerId", async (req, res) => {
   const { customerId } = req.params;
@@ -3343,6 +2508,14 @@ const OrderSchema = new mongoose.Schema({
   },
   preparingTime: Number,
   preparingStartedAt: Date,
+  discount: {
+    type: Number,
+    default: 0
+  },
+  discountApplied: {
+    type: Boolean,
+    default: false
+  },
   tableNumber: Number,
   createdAt: { type: Date, default: Date.now },
   orderTime: Date,
@@ -3389,398 +2562,11 @@ OrderSchema.statics.checkOrderStatus = async function (orderId) {
 const Order = mongoose.model("Order", OrderSchema);
 
 
-// Endpoint to create an order
-// app.post("/create-order/:customerId", async (req, res) => {
-//   const { customerId } = req.params;
-
-//   try {
-//     const { products, shippingInfo, shippingOption, userLocation } = req.body;
-//     let orderLocation;
-// const status = '';
-//     // Fetch the restaurant details from the database
-//     const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
-//     if (!restaurant) {
-//       console.log('restaurant not found');
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     // Get the restaurant coordinates
-//     const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
-//     if (shippingOption === 'dine-in' && req.body.tableNumber) {
-//       // Check if the table number is already reserved
-      // const existingOrder = await Order.findOne({
-      //   resName: resName,
-      //   tableNumber: req.body.tableNumber,
-      //   status: { $nin: ['Completed', 'Not Approved','Delivered'] } 
-      // });
-
-      // if (existingOrder) {
-      //   return res.status(400).json({ error: "Table number is already reserved." });
-      // }
-//     }
-//     // Determine the order location based on the shipping option
-//     if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
-//       orderLocation = {
-//         type: 'Point',
-//         coordinates: restaurantCoordinates
-//       };
-//     }    
-//     else if (shippingOption === 'delivery') {
-//       if (!userLocation) {
-//         return res.status(400).json({ error: "User location is required for delivery option" });
-//       }
-//       try {
-//         const address = `${userLocation.lat},${userLocation.lng}`;
-//         const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
-//         const { results } = geocodingResponse.data;
-//         if (!results || results.length === 0) {
-//           throw new Error('Geocoding failed or no results found');
-//         }
-//         const location = results[0].geometry.location;
-//         orderLocation = {
-//           type: 'Point',
-//           coordinates: [location.lng, location.lat]
-//         };
-//       } catch (error) {
-//         console.error('Geocoding error:', error);
-//         return res.status(500).json({ error: "Failed to get user location" });
-//       }
-//     } else {
-//       return res.status(400).json({ error: "Invalid shipping option" });
-//     }
-
-//     const orderId = generateRandomOrderId(); // Assuming generateRandomOrderId is defined elsewhere
-//     const orderDataToSave = {
-//       orderId: orderId,
-//       customerId: customerId,
-//       products: products,
-//       status: status,
-//       shippingInfo: shippingInfo,
-//       shippingOption: shippingOption,
-//       orderLocation: orderLocation,
-//       createdAt: new Date(),
-//       orderTime: new Date()
-//     };
-
-//     if (shippingOption === 'dine-in' && req.body.tableNumber) {
-//       orderDataToSave.tableNumber = req.body.tableNumber;
-//     }
-//     const order = new Order(orderDataToSave);
-
-//     await order.save();
-
-//     await Cart.deleteOne({ customerId: customerId });
-
-//     // Broadcast 'newOrderReceived' message to all clients (including the restaurant owner)
-//     broadcastNewOrderReceived(resName);
-//     broadcastCartUpdated();
-
-//     return res.status(201).json({ status: "ok", message: "Order created successfully", order });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-
-// app.post("/create-order/:customerId", async (req, res) => {
-//   const { customerId } = req.params;
-
-//   try {
-//     let { products, shippingInfo, shippingOption, userLocation } = req.body;
-
-//     // Check if products is an object with an 'undefined' key
-//     if (products && typeof products === 'object' && products.hasOwnProperty('undefined')) {
-//       console.log('Products object received:', products);
-//       products = products.undefined; // Reassign products to the array under 'undefined' key
-//     }
-
-//     console.log('Products: ', products);
-
-//     // Ensure products is an array
-//     if (!Array.isArray(products) || products.length === 0) {
-//       return res.status(400).json({ error: "Products array is empty or not provided" });
-//     }
-
-//     const uniqueRestaurants = new Set();
-//     products.forEach((product, index) => {
-//       console.log(`Product ${index}:`, product);
-//       if (product.products && product.products.length > 0) {
-//         product.products.forEach(p => {
-//           if (p.orderFrom) {
-//             uniqueRestaurants.add(p.orderFrom);
-//           }
-//         });
-//       } else {
-//         console.warn('Product missing products field:', product);
-//       }
-//     });
-//     console.log('Unique Restaurants:', uniqueRestaurants);
-
-//     if (uniqueRestaurants.size === 0) {
-//       return res.status(400).json({ error: "No valid restaurants found in products" });
-//     }
-
-//     const ordersToSave = [];
-//     for (const resName of uniqueRestaurants) {
-//       const orderProducts = products
-//         .filter(product => product.products && product.products.some(p => p.orderFrom === resName))
-//         .flatMap(product => product.products.filter(p => p.orderFrom === resName));
-
-//       const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
-//       if (!restaurant) {
-//         console.log('Restaurant not found for:', resName);
-//         continue;
-//       }
-
-//       const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
-
-//       let orderLocation;
-//       if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
-//         orderLocation = {
-//           type: 'Point',
-//           coordinates: restaurantCoordinates
-//         };
-//       } else if (shippingOption === 'delivery') {
-//         if (!userLocation) {
-//           return res.status(400).json({ error: "User location is required for delivery option" });
-//         }
-//         try {
-//           const address = `${userLocation.lat},${userLocation.lng}`;
-//           const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`);
-//           const { results } = geocodingResponse.data;
-//           if (!results || results.length === 0) {
-//             throw new Error('Geocoding failed or no results found');
-//           }
-//           const location = results[0].geometry.location;
-//           orderLocation = {
-//             type: 'Point',
-//             coordinates: [location.lng, location.lat]
-//           };
-//         } catch (error) {
-//           console.error('Geocoding error:', error);
-//           return res.status(500).json({ error: "Failed to get user location" });
-//         }
-//       } else {
-//         return res.status(400).json({ error: "Invalid shipping option" });
-//       }
-
-//       const orderId = generateRandomOrderId(); // Ensure this function is defined
-//       const orderDataToSave = {
-//         orderId: orderId,
-//         customerId: customerId,
-//         products: orderProducts,
-//         status: '', // Set an appropriate status
-//         shippingInfo: shippingInfo,
-//         shippingOption: shippingOption,
-//         orderLocation: orderLocation,
-//         createdAt: new Date(),
-//         orderTime: new Date()
-//       };
-
-//       if (shippingOption === 'dine-in' && req.body.tableNumber) {
-//         orderDataToSave.tableNumber = req.body.tableNumber;
-//       }
-
-//       const order = new Order(orderDataToSave);
-//       ordersToSave.push(order);
-//     }
-
-//     await Order.insertMany(ordersToSave);
-//     await Cart.deleteMany({ customerId: customerId });
-
-//     uniqueRestaurants.forEach(resName => {
-//       broadcastNewOrderReceived(resName);
-//     });
-//     broadcastCartUpdated();
-
-//     return res.status(201).json({ status: "ok", message: "Order(s) created successfully", orders: ordersToSave });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-// app.post("/create-order/:customerId", async (req, res) => {
-//   const { customerId } = req.params;
-
-//   try {
-//     let { products, shippingInfo, shippingOption, userLocation, tableNumber,deliveryCharges,deliveryCity } = req.body;
-
-//     console.log('Shipping info received at backend',shippingInfo);
-//     console.log('Products',products);
-
-//     if (products && typeof products === 'object' && products.hasOwnProperty('undefined')) {
-//       products = products.undefined;
-//     }
-
-//     if (!Array.isArray(products) || products.length === 0) {
-//       return res.status(400).json({ error: "Products array is empty or not provided" });
-//     }
-
-//     console.log('Products',products);
-//     const uniqueRestaurants = new Set();
-//     products.forEach((product) => {
-//       if (product.products && product.products.length > 0) {
-//         product.products.forEach(p => {
-//           if (p.orderFrom) {
-//             uniqueRestaurants.add(p.orderFrom);
-//           }
-//         });
-//       }
-//     });
-
-//     if (uniqueRestaurants.size === 0) {
-//       return res.status(400).json({ error: "No valid restaurants found in products" });
-//     }
-
-//     const ordersToSave = [];
-//     const productIdsToRemove = [];
-//     const errors = [];
-//     const successfulRestaurants = new Set(); // Track restaurants for which orders were successfully created
-
-//     for (const resName of uniqueRestaurants) {
-//       const restaurant = await Restaurant.findOne({ restaurantName: { $regex: new RegExp(`^${resName}$`, 'i') } });
-    
-//       if (!restaurant) {
-//         errors.push({ error: "Restaurant not found", resName: resName });
-//         continue;
-//       }
-    
-//       if (restaurant.status !== 'open') {
-//         errors.push({ error: `Restaurant is ${restaurant.status}`, resName: resName });
-//         continue;
-//       }
-    
-//       if (shippingOption === 'dine-in') {
-//         const existingOrder = await Order.findOne({
-//           'products.orderFrom': resName, // Check if any product is ordered from this restaurant
-//           tableNumber: tableNumber,
-//           status: { $nin: ['Completed', 'Not Approved', 'Delivered'] }
-//         });
-    
-//         if (existingOrder) {
-//           errors.push({ error: "Table number is already reserved", resName: resName });
-//           continue;
-//         }
-//       }    
-
-//       const orderProducts = products
-//         .filter(product => product.products && product.products.some(p => p.orderFrom === resName))
-//         .flatMap(product => product.products.filter(p => p.orderFrom === resName));
-
-//       const restaurantCoordinates = [restaurant.coordinates.latitude, restaurant.coordinates.longitude];
-//       let orderLocation;
-
-//       if (shippingOption === 'self-pickup' || shippingOption === 'dine-in') {
-//         orderLocation = {
-//           type: 'Point',
-//           coordinates: restaurantCoordinates
-//         };
-//       } else if (shippingOption === 'delivery') {
-//         if (!userLocation) {
-//           return res.status(400).json({ error: "User location is required for delivery option" });
-//         }
-
-//         try {
-//           const address = `${userLocation.lat},${userLocation.lng}`;
-//           const geocodingResponse = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=AIzaSyAS3sYiLZxlLVObHv7zP2Rrdcz3T2Sc6Vs`);
-//           const { results } = geocodingResponse.data;
-        
-//           console.log('Geocoding results', geocodingResponse);
-//           console.log('Geocoding data', geocodingResponse.data);
-        
-//           if (!results || results.length === 0) {
-//             throw new Error('Geocoding failed or no results found');
-//           }
-        
-//           const location = results[0].geometry.location;
-//           const formattedAddress = results[0].formatted_address;
-//           const placeName = results[0].address_components.find(component => component.types.includes('establishment'))?.long_name || 'Unknown place';
-        
-//           orderLocation = {
-//             type: 'Point',
-//             coordinates: [location.lng, location.lat],
-//             formatted_address: formattedAddress,
-//             place_name: placeName
-//           };
-        
-//           console.log('Order location:', orderLocation);
-        
-//         } catch (error) {
-//           console.error('Geocoding error:', error);
-//           return res.status(500).json({ error: "Failed to get user location" });
-//         }        
-//       } else {
-//         return res.status(400).json({ error: "Invalid shipping option" });
-//       }
-
-//       const orderId = generateRandomOrderId();
-//       const orderDataToSave = {
-//         orderId: orderId,
-//         customerId: customerId,
-//         products: orderProducts,
-//         status: '',
-//         shippingInfo: shippingInfo,
-//         shippingOption: shippingOption,
-//         orderLocation: orderLocation,
-//         createdAt: new Date(),
-//         orderTime: new Date()
-//       };
-
-//       if (shippingOption === 'dine-in' && tableNumber) {
-//         orderDataToSave.tableNumber = tableNumber;
-//       }
-//       if (shippingOption === 'delivery' && deliveryCharges && deliveryCity) {
-//         orderDataToSave.deliveryCharges = deliveryCharges;
-//         orderDataToSave.deliveryCity=deliveryCity;
-//       }
-
-//       const order = new Order(orderDataToSave);
-//       ordersToSave.push(order);
-//       productIdsToRemove.push(...orderProducts.map(p => p._id));
-
-//       // Add the restaurant name to the successfulRestaurants set
-//       successfulRestaurants.add(resName);
-//     }
-
-//     if (ordersToSave.length === 0) {
-//       return res.status(400).json({ error: "No orders could be created", details: errors });
-//     }
-
-//     await Order.insertMany(ordersToSave);
-
-//     const carts = await Cart.find({ customerId: customerId });
-//     for (const cart of carts) {
-//       cart.products = cart.products.filter(product => !productIdsToRemove.includes(product._id.toString()));
-
-//       if (cart.products.length === 0) {
-//         await Cart.deleteOne({ _id: cart._id });
-//       } else {
-//         await cart.save();
-//       }
-//     }
-
-//     // Broadcast only for the restaurants that had orders created
-//     successfulRestaurants.forEach(resName => {
-//       broadcastNewOrderReceived(resName);
-//     });
-
-//     broadcastCartUpdated();
-
-//     return res.status(201).json({ status: "ok", message: "Order(s) created successfully", orders: ordersToSave });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-
 app.post("/create-order/:customerId", async (req, res) => {
   const { customerId } = req.params;
 
   try {
-    let { products, shippingInfo, shippingOption, userLocation, tableNumber, deliveryCharges, deliveryCity } = req.body;
+    let { products, shippingInfo, shippingOption, userLocation, tableNumber, deliveryCharges, deliveryCity, couponCode } = req.body;
 
     if (products && typeof products === 'object' && products.hasOwnProperty('undefined')) {
       products = products.undefined;
@@ -3856,11 +2642,41 @@ app.post("/create-order/:customerId", async (req, res) => {
         };
 
       } catch (error) {
-        console.error('Geocoding error:', error);
+        // console.error('Geocoding error:', error);
         return res.status(500).json({ error: "Failed to get user location" });
       }
     } else {
       return res.status(400).json({ error: "Invalid shipping option" });
+    }
+
+    //new changes starting here
+
+    let discount = 0;
+    let discountApplied = false;
+
+    if (couponCode) {
+      console.log('Coupon Code: ' + couponCode);
+      // Fetch the coupon by code and restaurantId
+      const coupon = await Coupon.findOne({ code: couponCode, restaurant: restaurant._id });
+      if (!coupon) {
+        return res.status(404).json({ error: 'Coupon not found' });
+      }
+
+      // Check if the coupon has expired
+      if (new Date() > coupon.expiryDate) {
+        return res.status(400).json({ error: 'Coupon has expired' });
+      }
+
+      discount = coupon.discountPercentage;
+      discountApplied = true;
+      // Update user usage
+      const userUsage = coupon.userUsage.find(usage => usage.userId.toString() === customerId);
+      if (userUsage) {
+        userUsage.count += 1;
+      } else {
+        coupon.userUsage.push({ userId: customerId, count: 1 });
+      }
+      await coupon.save();
     }
 
     const orderId = generateRandomOrderId();
@@ -3873,7 +2689,9 @@ app.post("/create-order/:customerId", async (req, res) => {
       shippingOption: shippingOption,
       orderLocation: orderLocation,
       createdAt: new Date(),
-      orderTime: new Date()
+      orderTime: new Date(),
+      discount: discount,
+      discountApplied:discountApplied
     };
 
     if (shippingOption === 'dine-in' && tableNumber) {
@@ -3910,14 +2728,6 @@ app.post("/create-order/:customerId", async (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-
 function generateRandomOrderId() {
   const timestamp = Date.now().toString(36);
   const randomString = Math.random().toString(36).substr(2, 5);
@@ -3936,23 +2746,6 @@ app.get("/orders", async (req, res) => {
   }
 });
 
-// Endpoint to get orders by resName
-// app.get("/orders/:resName", async (req, res) => {
-//   const { resName } = req.params;
-// console.log('Res Name passing in backend for fetching res specific order',resName);
-//   try {
-//     const orders = await Order.find({ resName });
-//     console.log('Order found', orders);
-//     if (orders.length === 0) {
-//       console.log('No orders found');
-//       return res.status(404).json({ status: "error", message: "No orders found for the specified restaurant name" });
-//     }
-//     return res.status(200).json({ status: "ok", orders });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 app.get("/orders/:resName", async (req, res) => {
   const { resName } = req.params;
   console.log('Res Name passing in backend for fetching res specific order', resName);
@@ -4019,22 +2812,6 @@ app.get('/order/delivery/:customerId', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
-
-
-
-// Endpoint to update an order status
-// app.put("/orders/:orderId", async (req, res) => {
-//   const { orderId } = req.params;
-//   const { status } = req.body;
-//   try {
-//     await Order.findOneAndUpdate({ orderId }, { status });
-//     return res.status(200).json({ status: "ok", message: "Order status updated successfully" });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 app.put("/orders/:orderId", async (req, res) => {
   const { orderId } = req.params;
@@ -4133,107 +2910,6 @@ app.get("/restaurant/:restaurantName/category/:categoryName/dishes", async (req,
   }
 });
 
-
-
-
-// Endpoint to add a dish to a specific category in a specific restaurant
-// app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (req, res) => {
-//   const { restaurantName, categoryName } = req.params;
-//   const { name, price, dishImage, description } = req.body;
-
-//   try {
-//     const restaurant = await Restaurant.findOne({ restaurantName });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     const categoryIndex = restaurant.menu.findIndex(category => category.categoryName === categoryName);
-//     if (categoryIndex === -1) {
-//       return res.status(404).json({ error: "Category not found in the specified restaurant" });
-//     }
-
-//     const newDish = {
-//       name,
-//       price,
-//       dishImage,
-//       description
-//     };
-
-//     restaurant.menu[categoryIndex].dishes.push(newDish);
-//     await restaurant.save();
-
-//     return res.status(201).json({ status: "ok", message: "Dish added successfully", dish: newDish });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
-
-// app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", async (req, res) => {
-//   const { restaurantName, categoryName } = req.params;
-//   const { name, price, dishImage, description, extras } = req.body;
-//   const { requiredExtras, optionalExtras } = extras;
-
-//   try {
-//     const restaurant = await Restaurant.findOne({ restaurantName });
-//     if (!restaurant) {
-//       return res.status(404).json({ error: "Restaurant not found" });
-//     }
-
-//     const categoryIndex = restaurant.menu.findIndex(category => category.categoryName === categoryName);
-//     if (categoryIndex === -1) {
-//       return res.status(404).json({ error: "Category not found in the specified restaurant" });
-//     }
-
-//     const validRequiredExtras = Array.isArray(requiredExtras)
-//       ? requiredExtras
-//           .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
-//           .map(extra => ({
-//             name: extra.name,
-//             price: extra.price
-//           }))
-//       : undefined;
-
-//     const validOptionalExtras = Array.isArray(optionalExtras)
-//       ? optionalExtras
-//           .filter(extra => extra.name && extra.price != null)  // Filter out empty name or null price
-//           .map(extra => ({
-//             name: extra.name,
-//             price: extra.price
-//           }))
-//       : undefined;
-
-//     const newDish = new Dish({
-//       name,
-//       price,
-//       dishImage,
-//       description,
-//       extras: {
-//         requiredExtras: validRequiredExtras && validRequiredExtras.length > 0 ? validRequiredExtras : undefined,
-//         optionalExtras: validOptionalExtras && validOptionalExtras.length > 0 ? validOptionalExtras : undefined
-//       }
-//     });
-
-//     await newDish.save();
-
-//     // Push the new dish to the specified category in the menu
-//     restaurant.menu[categoryIndex].dishes.push(newDish);
-    
-//     // Update the menu in the database
-//     await Restaurant.findByIdAndUpdate(restaurant._id, { menu: restaurant.menu });
-
-//     // Update the MenuCategory table
-//     await MenuCategory.findOneAndUpdate(
-//       { categoryName: categoryName },
-//       { $push: { dishes: newDish } }
-//     );
-
-//     return res.status(201).json({ status: "ok", message: "Dish added successfully", dish: newDish });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 app.post("/restaurant/:restaurantName/category/:categoryName/add-dish", upload.single('dishImage'), async (req, res) => {
   const { restaurantName, categoryName } = req.params;
@@ -4828,7 +3504,7 @@ app.get("/logged-in-users", async (req, res) => {
 app.get("/all-users", async (req, res) => {
   try {
     // Find all registered clients
-    const allUsers = await ClientInfo.find();
+    const allUsers = await Clientt.find();
 
     // If no users found, return empty array
     if (!allUsers || allUsers.length === 0) {

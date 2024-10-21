@@ -26,4 +26,4 @@ const clientDetailsSchema = new mongoose.Schema({
     collection: "clientInfo"
 });
 
-mongoose.model("ClientInfo", clientDetailsSchema);
+module.exports = mongoose.model("ClientInfo", clientDetailsSchema);
