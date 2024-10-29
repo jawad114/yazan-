@@ -47,7 +47,19 @@ async function sendEmail({ email, subject, verificationCode = '', type, firstNam
         <p style="color: #555;">Best regards,<br><strong>Layla Security Team</strong></p>
       </div>
     `;
-  }
+  }else if (type === 'newOrder') {
+    htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+        <h2 style="color:#2C3E50; text-align: center;">New Order Received</h2>
+        <p style="color: #555;">Dear ${firstName ? firstName : 'Owner'},</p>
+        <p style="color: #555;">You have received a new order on Layla! Please check your dashboard to view the order details and prepare it promptly for the customer.</p>
+        <p style="color: #555;">To review the order, log in to your Layla account and navigate to the "Orders" section in your dashboard.</p>
+        <p style="color: #555;">If you have any questions or need assistance, feel free to reach out to our support team.</p>
+        <p style="color: #555;">Best regards,<br><strong>The Layla Team</strong></p>
+      </div>
+    `;
+}
+
 
   const mailOptions = {
     from: `"Layla Security Team" <${process.env.smtp_email}>`,

@@ -2718,8 +2718,16 @@ app.post("/create-order/:customerId", async (req, res) => {
       }
     }
 
+    const owner = await Ownerr.findOne({firstname: firstRestaurant});
+
     broadcastNewOrderReceived(firstRestaurant);
     broadcastCartUpdated();
+    await sendEmail({
+      email:owner.email,
+      subject: 'New Order Received',
+      type: 'newOrder',
+      firstName: owner.firstname,
+    });
 
     return res.status(201).json({ status: "ok", message: "Order created successfully", order: order });
   } catch (error) {
